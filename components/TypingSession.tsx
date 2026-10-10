@@ -19,6 +19,8 @@ export type SessionResult = {
 
 type State = {
   typed: string;
+  /** Positions filled in automatically (code indentation) — not counted as typed. */
+  auto: number[];
   keystrokes: number;
   mistakes: number;
   startedAt: number | null;
@@ -31,7 +33,7 @@ type Action =
   | { type: "back"; word: boolean }
   | { type: "timeup"; at: number };
 
-const INITIAL: State = { typed: "", keystrokes: 0, mistakes: 0, startedAt: null, finishedAt: null };
+const INITIAL: State = { typed: "", auto: [], keystrokes: 0, mistakes: 0, startedAt: null, finishedAt: null };
 
 function reducer(state: State, action: Action): State {
   if (state.finishedAt !== null) return state;
@@ -39,24 +41,33 @@ function reducer(state: State, action: Action): State {
   if (action.type === "tab") {
     // Tab fills in the indentation spaces of a code line.
     let typed = state.typed;
-    while (action.text[typed.length] === " " && typed.length < action.text.length) typed += " ";
-    return { ...state, typed };
+    const auto = [...state.auto];
+    while (action.text[typed.length] === " " && typed.length < action.text.length) {
+      auto.push(typed.length);
+      typed += " ";
+    }
+    return { ...state, typed, auto };
   }
   if (action.type === "back") {
     if (!state.typed) return state;
     // Ctrl/Alt+Backspace removes the whole word.
     const cut = action.word ? state.typed.replace(/\S*\s?$/, "") : state.typed.slice(0, -1);
-    return { ...state, typed: cut };
+    return { ...state, typed: cut, auto: state.auto.filter((i) => i < cut.length) };
   }
   const { char, at, text, code } = action;
   if (state.typed.length >= text.length) return state;
   let typed = state.typed + char;
+  const auto = [...state.auto];
   // In code, the next line's indentation is typed for you after a correct Enter.
   if (code && char === "\n" && text[state.typed.length] === "\n") {
-    while (text[typed.length] === " ") typed += " ";
+    while (text[typed.length] === " ") {
+      auto.push(typed.length);
+      typed += " ";
+    }
   }
   return {
     typed,
+    auto,
     keystrokes: state.keystrokes + 1,
     mistakes: state.mistakes + (char === text[state.typed.length] ? 0 : 1),
     startedAt: state.startedAt ?? at,
@@ -68,12 +79,15 @@ export function measure(state: State, now: number, text: string): SessionResult 
   const end = state.finishedAt ?? now;
   const ms = state.startedAt === null ? 0 : Math.max(end - state.startedAt, 1);
   const minutes = Math.max(ms, 1000) / 60000; // avoid a huge spike on the first key
+  // Auto-filled indentation isn't the user's typing, so it doesn't count towards speed.
+  const auto = new Set(state.auto);
   let correct = 0;
-  for (let i = 0; i < state.typed.length; i++) if (state.typed[i] === text[i]) correct++;
-  const wrong = state.typed.length - correct;
+  for (let i = 0; i < state.typed.length; i++) if (!auto.has(i) && state.typed[i] === text[i]) correct++;
+  const typedByUser = state.typed.length - auto.size;
+  const wrong = typedByUser - correct;
   return {
     wpm: state.startedAt === null ? 0 : Math.round(correct / 5 / minutes),
-    raw: state.startedAt === null ? 0 : Math.round(state.typed.length / 5 / minutes),
+    raw: state.startedAt === null ? 0 : Math.round(typedByUser / 5 / minutes),
     acc: state.keystrokes ? Math.round(((state.keystrokes - state.mistakes) / state.keystrokes) * 100) : 100,
     correct,
     wrong,

@@ -5,11 +5,15 @@ import TypingSession, { SessionResult, fmtTime } from "./TypingSession";
 import { ALL_LESSONS, SECTIONS, makeText, sectionOf, testText } from "@/lib/lessons";
 import { BANDS, getProgress, getServerProgress, saveResult, speedBand, subscribe } from "@/lib/progress";
 import {
+  WORD_CHOICES,
   getKbdPref,
   getKbdPrefOnServer,
+  getWordCount,
+  getWordCountOnServer,
   isMuted,
   isMutedOnServer,
   playComplete,
+  setWordCount,
   subscribeSound,
   toggleKbd,
   toggleMute,
@@ -37,15 +41,29 @@ export default function TypingApp() {
   const [rotateDismissed, setRotateDismissed] = useState(false);
   const muted = useSyncExternalStore(subscribeSound, isMuted, isMutedOnServer);
   const kbdPref = useSyncExternalStore(subscribeSound, getKbdPref, getKbdPrefOnServer);
+  const wordCount = useSyncExternalStore(subscribeSound, getWordCount, getWordCountOnServer);
 
   const lesson = run.kind === "lesson" ? ALL_LESSONS[run.index] : null;
 
   // Every start builds a new random text.
-  const openLesson = useCallback((index: number) => {
-    setRun((r) => ({ kind: "lesson", index, text: makeText(ALL_LESSONS[index], Date.now()), round: r.round + 1 }));
-    setResult(null);
-    setMenu(false);
-  }, []);
+  const openLesson = useCallback(
+    (index: number) => {
+      setRun((r) => ({ kind: "lesson", index, text: makeText(ALL_LESSONS[index], Date.now(), wordCount), round: r.round + 1 }));
+      setResult(null);
+      setMenu(false);
+    },
+    [wordCount],
+  );
+
+  // New paragraph length: rebuild the current paragraph lesson straight away (menu stays open).
+  const changeWords = (n: number) => {
+    setWordCount(n);
+    const words = getWordCount();
+    if (run.kind === "lesson" && ALL_LESSONS[run.index].para) {
+      setRun((r) => ({ ...r, text: makeText(ALL_LESSONS[run.index], Date.now(), words), round: r.round + 1 }));
+      setResult(null);
+    }
+  };
 
   const openTest = useCallback((minutes: number) => {
     setRun((r) => ({ kind: "test", minutes, text: testText(Date.now()), round: r.round + 1 }));
@@ -118,6 +136,7 @@ export default function TypingApp() {
           result={result}
           title={lesson ? lesson.title : "Typing test"}
           bestId={id}
+          onAgain={() => (run.kind === "lesson" ? openLesson(run.index) : openTest(run.minutes))}
           onNext={hasNext && run.kind === "lesson" ? () => openLesson(run.index + 1) : undefined}
           onMenu={() => setMenu(true)}
         />
@@ -136,6 +155,8 @@ export default function TypingApp() {
       {menu && (
         <Menu
           current={run.kind === "lesson" ? run.index : -1}
+          words={wordCount}
+          onWords={changeWords}
           onLesson={openLesson}
           onTest={openTest}
           onClose={() => setMenu(false)}
@@ -147,11 +168,15 @@ export default function TypingApp() {
 
 function Menu({
   current,
+  words,
+  onWords,
   onLesson,
   onTest,
   onClose,
 }: {
   current: number;
+  words: number;
+  onWords: (n: number) => void;
   onLesson: (index: number) => void;
   onTest: (minutes: number) => void;
   onClose: () => void;
@@ -159,6 +184,7 @@ function Menu({
   const progress = useSyncExternalStore(subscribe, getProgress, getServerProgress);
   const [open, setOpen] = useState(current >= 0 ? sectionOf(ALL_LESSONS[current]).id : "test");
   const [custom, setCustom] = useState("15");
+  const [customWords, setCustomWords] = useState(WORD_CHOICES.includes(words) ? "" : String(words));
 
   // Basic, Experienced, Advance, then Test, then C Programs.
   const items = [...SECTIONS.slice(0, 3).map((s) => s.id), "test", SECTIONS[3].id];
@@ -173,6 +199,48 @@ function Menu({
           </button>
         </div>
         <div className="drawer-body">
+          <div className="words-pick">
+            <div className="words-head">
+              <b>Paragraph length</b>
+              <small>Experienced &amp; Advance · {words} words</small>
+            </div>
+            <div className="word-chips">
+              {WORD_CHOICES.map((n) => (
+                <button
+                  key={n}
+                  className={`chip ${words === n ? "on" : ""}`}
+                  onClick={() => {
+                    setCustomWords("");
+                    onWords(n);
+                  }}
+                >
+                  {n}
+                </button>
+              ))}
+              <form
+                className="chip-custom"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (customWords) onWords(Number(customWords));
+                }}
+              >
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={5}
+                  max={500}
+                  placeholder="Custom"
+                  value={customWords}
+                  onChange={(e) => setCustomWords(e.target.value)}
+                  className={!WORD_CHOICES.includes(words) ? "on" : ""}
+                  aria-label="Custom number of words"
+                />
+                <button className="btn primary" type="submit" disabled={!customWords}>
+                  Set
+                </button>
+              </form>
+            </div>
+          </div>
           {items.map((itemId, n) => {
             const section = SECTIONS.find((s) => s.id === itemId);
             const isOpen = open === itemId;
@@ -263,12 +331,14 @@ function ResultPage({
   result,
   title,
   bestId,
+  onAgain,
   onNext,
   onMenu,
 }: {
   result: SessionResult;
   title: string;
   bestId: string;
+  onAgain: () => void;
   onNext?: () => void;
   onMenu: () => void;
 }) {
@@ -309,7 +379,20 @@ function ResultPage({
             <button className="btn" onClick={onMenu}>
               Menu
             </button>
-            {onNext && (
+            {/* Under 30 wpm: "Try again" is the main button, but moving on is still allowed. */}
+            {band === "slow" && (
+              <>
+                {onNext && (
+                  <button className="btn" onClick={onNext}>
+                    Next lesson →
+                  </button>
+                )}
+                <button className="btn primary" onClick={onAgain}>
+                  Try again ↻
+                </button>
+              </>
+            )}
+            {band !== "slow" && onNext && (
               <button className="btn primary" onClick={onNext}>
                 Next lesson →
               </button>

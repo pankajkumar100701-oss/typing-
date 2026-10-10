@@ -3,7 +3,8 @@
 import { C_PROGRAMS } from "./cPrograms";
 
 /** `hint` says where the keys are / which finger to use. `code` lessons keep line breaks. */
-export type Lesson = { id: string; title: string; hint: string; make: () => string; code?: boolean; para?: boolean };
+/** `make(words)` builds the text; paragraph lessons use `words` as their length. */
+export type Lesson = { id: string; title: string; hint: string; make: (words: number) => string; code?: boolean; para?: boolean };
 export type Section = { id: string; title: string; note: string; lessons: Lesson[] };
 
 const WORDS = `
@@ -98,12 +99,26 @@ function words(count: number, pool = WORDS): string[] {
 function drill(keys: string, known: string): string {
   const fitting = WORDS.filter((w) => [...w].every((c) => known.includes(c)));
   const out: string[] = [];
-  for (let i = 0; i < 14; i++) {
+  for (let i = 0; i < 40; i++) {
     if (fitting.length >= 4 && i % 2 === 1) {
       out.push(pick(fitting));
     } else {
       const len = 2 + Math.floor(rnd() * 3);
       out.push(Array.from({ length: len }, () => pick([...keys])).join(""));
+    }
+  }
+  return out.join(" ");
+}
+
+/** Random sentences joined until the paragraph has at least `target` words. */
+function paragraph(target: number): string {
+  const out: string[] = [];
+  let count = 0;
+  while (count < target) {
+    for (const sentence of shuffle(SENTENCES)) {
+      out.push(sentence);
+      count += sentence.split(" ").length;
+      if (count >= target) break;
     }
   }
   return out.join(" ");
@@ -115,9 +130,9 @@ const BOTTOM = "zxcvbnm,./";
 
 const cap = (w: string) => w[0].toUpperCase() + w.slice(1);
 
-const L = (id: string, title: string, hint: string, make: () => string): Lesson => ({ id, title, hint, make });
+const L = (id: string, title: string, hint: string, make: (words: number) => string): Lesson => ({ id, title, hint, make });
 /** Paragraph lesson: shown wrapped over a few lines instead of one sliding line. */
-const P = (id: string, title: string, hint: string, make: () => string): Lesson => ({ id, title, hint, make, para: true });
+const P = (id: string, title: string, hint: string, make: (words: number) => string): Lesson => ({ id, title, hint, make, para: true });
 
 export const SECTIONS: Section[] = [
   {
@@ -143,7 +158,7 @@ export const SECTIONS: Section[] = [
       L("b16", ", . /", "Right hand reaches down: middle ,  ring .  little /", () => drill(",./", HOME + TOP + BOTTOM)),
       L("b17", "Full Bottom Row", "Z X C V B  N M , . / — the bottom row", () => drill(BOTTOM, HOME + TOP + BOTTOM)),
       L("b18", "Space and Shift", "Thumbs press space; the other hand's little finger holds Shift", () =>
-        words(18).map((w) => (rnd() < 0.4 ? cap(w) : w)).join(" "),
+        words(35).map((w) => (rnd() < 0.4 ? cap(w) : w)).join(" "),
       ),
     ],
   },
@@ -152,15 +167,15 @@ export const SECTIONS: Section[] = [
     title: "Experienced",
     note: "Real words, capitals, numbers and punctuation",
     lessons: [
-      L("e1", "Short Words", "Keep your eyes on the screen, not your fingers", () => words(25, WORDS.filter((w) => w.length <= 4)).join(" ")),
-      L("e2", "Common Words", "Type each word in one smooth go", () => words(30).join(" ")),
-      L("e3", "Longer Words", "Slow down a little on long words", () => words(22, WORDS.filter((w) => w.length >= 5)).join(" ")),
-      L("e4", "Capital Letters", "Shift with the opposite hand's little finger", () => words(22).map((w) => (rnd() < 0.5 ? cap(w) : w)).join(" ")),
-      L("e5", "Numbers", "Numbers sit above the top row — same fingers reach up", () =>
-        words(20).map((w) => (rnd() < 0.4 ? String(Math.floor(rnd() * 2000)) : w)).join(" "),
+      P("e1", "Short Words", "Keep your eyes on the screen, not your fingers", (n) => words(n, WORDS.filter((w) => w.length <= 4)).join(" ")),
+      P("e2", "Common Words", "Type each word in one smooth go", (n) => words(n).join(" ")),
+      P("e3", "Longer Words", "Slow down a little on long words", (n) => words(n, WORDS.filter((w) => w.length >= 5)).join(" ")),
+      P("e4", "Capital Letters", "Shift with the opposite hand's little finger", (n) => words(n).map((w) => (rnd() < 0.5 ? cap(w) : w)).join(" ")),
+      P("e5", "Numbers", "Numbers sit above the top row — same fingers reach up", (n) =>
+        words(n).map((w) => (rnd() < 0.4 ? String(Math.floor(rnd() * 2000)) : w)).join(" "),
       ),
-      L("e6", "Punctuation", "Right little finger handles ; ' / and ?", () =>
-        words(22).map((w) => (rnd() < 0.3 ? w + pick([",", ".", "?", "!", ";"]) : w)).join(" "),
+      P("e6", "Punctuation", "Right little finger handles ; ' / and ?", (n) =>
+        words(n).map((w) => (rnd() < 0.3 ? w + pick([",", ".", "?", "!", ";"]) : w)).join(" "),
       ),
     ],
   },
@@ -169,11 +184,11 @@ export const SECTIONS: Section[] = [
     title: "Advance",
     note: "Sentences, paragraphs and symbols",
     lessons: [
-      P("a1", "Sentences", "Keep a steady rhythm", () => shuffle(SENTENCES).slice(0, 3).join(" ")),
-      P("a2", "Paragraph", "Accuracy first, speed follows", () => shuffle(SENTENCES).slice(0, 5).join(" ")),
-      P("a3", "Long Paragraph", "Stay relaxed for the whole paragraph", () => shuffle(SENTENCES).slice(0, 8).join(" ")),
-      P("a4", "Symbols", "Symbols use Shift + the number row", () =>
-        Array.from({ length: 16 }, (_, i) => (i % 2 ? pick(SYMBOLS) : pick(WORDS))).join(" "),
+      P("a1", "Sentences", "Keep a steady rhythm", (n) => paragraph(n)),
+      P("a2", "Paragraph", "Accuracy first, speed follows", (n) => paragraph(n)),
+      P("a3", "Long Paragraph", "Stay relaxed for the whole paragraph", (n) => paragraph(Math.round(n * 1.5))),
+      P("a4", "Symbols", "Symbols use Shift + the number row", (n) =>
+        Array.from({ length: n }, (_, i) => (i % 2 ? pick(SYMBOLS) : pick(WORDS))).join(" "),
       ),
     ],
   },
@@ -203,7 +218,7 @@ export function testText(newSeed: number): string {
   return words(500).join(" ");
 }
 
-export function makeText(lesson: Lesson, newSeed: number): string {
+export function makeText(lesson: Lesson, newSeed: number, words = 100): string {
   seed = newSeed;
-  return lesson.make();
+  return lesson.make(words);
 }

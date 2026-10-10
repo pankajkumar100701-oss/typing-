@@ -120,3 +120,34 @@ export function toggleKbd() {
   }
   listeners.forEach((l) => l());
 }
+
+// Paragraph length (words) for Experienced and Advance lessons.
+const WORDS_KEY = "typefast:words";
+export const WORD_CHOICES = [20, 30, 50, 70, 100];
+let wordCount: number | null = null;
+
+export function getWordCount(): number {
+  if (wordCount === null) {
+    try {
+      const v = Number(localStorage.getItem(WORDS_KEY));
+      wordCount = v >= 5 && v <= 500 ? v : 100;
+    } catch {
+      wordCount = 100;
+    }
+  }
+  return wordCount;
+}
+
+export function getWordCountOnServer(): number {
+  return 100;
+}
+
+export function setWordCount(n: number) {
+  wordCount = Math.min(500, Math.max(5, Math.round(n) || 100));
+  try {
+    localStorage.setItem(WORDS_KEY, String(wordCount));
+  } catch {
+    // storage blocked — the setting lasts for this visit only
+  }
+  listeners.forEach((l) => l());
+}

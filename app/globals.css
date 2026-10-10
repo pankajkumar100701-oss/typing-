@@ -616,6 +616,70 @@ button:disabled {
   font-size: 1.1rem;
   color: var(--muted);
 }
+.words-pick {
+  margin-bottom: 10px;
+  padding: 8px 10px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--sky-2);
+}
+.words-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.words-head b {
+  font-size: 0.85rem;
+}
+.words-head small {
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+.word-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.chip {
+  min-width: 40px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.chip.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.chip-custom {
+  display: flex;
+  gap: 6px;
+  flex: 1;
+  min-width: 140px;
+}
+.chip-custom input {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  font: inherit;
+  font-size: 16px;
+  color: var(--text);
+  user-select: text;
+}
+.chip-custom input.on {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.chip-custom .btn {
+  padding: 4px 12px;
+}
 .lesson-list {
   padding: 4px 6px 6px;
 }
