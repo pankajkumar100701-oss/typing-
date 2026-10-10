@@ -135,6 +135,24 @@ button:disabled {
   font-weight: 700;
   color: var(--accent);
 }
+.spacer {
+  flex: 1;
+}
+.sound-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 99px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.sound-btn.off {
+  color: var(--muted);
+}
 .menu-btn {
   display: flex;
   align-items: center;
@@ -270,6 +288,24 @@ button:disabled {
 }
 .ch.nl {
   font-size: 0.7em;
+}
+.text-box.is-para {
+  align-items: flex-start;
+  padding: 8px 16px;
+  font-size: clamp(15px, 2.3vw, 24px);
+  line-height: 1.6;
+}
+.text-box.is-para::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 22px;
+  background: linear-gradient(transparent, var(--surface));
+  pointer-events: none;
+}
+.text-box.is-para .text-line {
+  width: 100%;
+  white-space: pre-wrap;
 }
 .text-line {
   position: relative;
@@ -638,12 +674,60 @@ button:disabled {
   font-weight: 600;
 }
 .legend {
-  margin: 10px 4px 0;
+  margin: 12px 2px 4px;
+}
+.legend h4 {
+  margin: 0 4px 6px;
   font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
   color: var(--muted);
 }
-.legend .best {
-  margin: 0 3px;
+.band {
+  display: flex;
+  gap: 10px;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  border-radius: 10px;
+  background: color-mix(in oklab, currentColor 8%, var(--surface));
+  border: 1px solid color-mix(in oklab, currentColor 30%, transparent);
+}
+.band.slow {
+  color: var(--slow);
+}
+.band.mid {
+  color: var(--mid);
+}
+.band.fast {
+  color: var(--fast);
+}
+.band-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  margin-top: 4px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.band-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.band-text b {
+  font-size: 0.85rem;
+}
+.band-text b small {
+  margin-left: 4px;
+  font-weight: 500;
+  font-size: 0.7rem;
+  opacity: 0.85;
+}
+.band-text > span {
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: var(--text);
 }
 
 /* ---------- result page ---------- */
@@ -738,8 +822,15 @@ button:disabled {
 }
 .result-speed .verdict {
   margin-top: 8px;
-  font-size: 0.85rem;
-  font-weight: 600;
+  font-size: 1rem;
+  font-weight: 700;
+}
+.result-speed .motivation {
+  margin-top: 4px;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  text-align: center;
+  color: var(--text);
 }
 .result-side {
   flex: 1;
@@ -819,6 +910,15 @@ button:disabled {
   .rotate-overlay h2 {
     margin: 20px 0 0;
     font-size: 1.1rem;
+  }
+  .rotate-overlay .kbd-tip {
+    max-width: 320px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: var(--accent-soft);
+    color: var(--text);
+    font-size: 0.85rem;
+    line-height: 1.4;
   }
   .rotate-overlay p {
     margin: 0 0 16px;

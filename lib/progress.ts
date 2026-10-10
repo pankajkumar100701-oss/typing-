@@ -42,9 +42,16 @@ export function saveResult(id: string, result: Best) {
   listeners.forEach((l) => l());
 }
 
-/** Speed colour band: under 30 wpm red, 30–49 yellow, 50+ green. */
+/** Speed colour band: under 30 wpm red, 30–40 yellow, above 40 green. */
 export function speedBand(wpm: number): "slow" | "mid" | "fast" {
   if (wpm < 30) return "slow";
-  if (wpm < 50) return "mid";
+  if (wpm <= 40) return "mid";
   return "fast";
 }
+
+/** Name and an encouraging line for each speed band. */
+export const BANDS = {
+  slow: { name: "Average", range: "below 30 wpm", line: "Every fast typist started here. Practise a little daily and you'll get there!" },
+  mid: { name: "Good", range: "30–40 wpm", line: "Nice work! A bit more practice and your fingers will fly." },
+  fast: { name: "Going great", range: "above 40 wpm", line: "Great speed, but don't stop now. Keep pushing for even more!" },
+} as const;

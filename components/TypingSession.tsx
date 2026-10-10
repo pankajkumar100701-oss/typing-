@@ -93,12 +93,14 @@ type Props = {
   hint?: string;
   /** Multi-line code: Enter makes a new line and indentation is automatic. */
   code?: boolean;
+  /** Paragraph: wrapped over a few lines that scroll up as you type. */
+  para?: boolean;
   /** Seconds; the session ends when time runs out (timed test). */
   timeLimit?: number;
   onFinish: (result: SessionResult) => void;
 };
 
-export default function TypingSession({ text, hint, code = false, timeLimit, onFinish }: Props) {
+export default function TypingSession({ text, hint, code = false, para = false, timeLimit, onFinish }: Props) {
   const [state, dispatch] = useReducer(reducer, INITIAL);
   const [now, setNow] = useState(0);
   const [shift, setShift] = useState(false);
@@ -167,14 +169,17 @@ export default function TypingSession({ text, hint, code = false, timeLimit, onF
       caret.style.transform = `translate(${left}px, ${span.offsetTop}px)`;
       caret.style.height = `${span.offsetHeight}px`;
       // Lessons slide sideways; code scrolls up line by line.
-      line.style.transform = code
-        ? `translate(${-Math.max(0, left - box.clientWidth * 0.75)}px, ${-Math.max(0, span.offsetTop - box.clientHeight * 0.3)}px)`
-        : `translateX(${-Math.max(0, left - box.clientWidth * 0.35)}px)`;
+      // Paragraphs keep the current line second from the top.
+      line.style.transform = para
+        ? `translateY(${-Math.max(0, span.offsetTop - span.offsetHeight)}px)`
+        : code
+          ? `translate(${-Math.max(0, left - box.clientWidth * 0.75)}px, ${-Math.max(0, span.offsetTop - box.clientHeight * 0.3)}px)`
+          : `translateX(${-Math.max(0, left - box.clientWidth * 0.35)}px)`;
     };
     place();
     window.addEventListener("resize", place);
     return () => window.removeEventListener("resize", place);
-  }, [pos, text, code]);
+  }, [pos, text, code, para]);
 
   // Report the result once.
   const reported = useRef(false);
@@ -222,8 +227,8 @@ export default function TypingSession({ text, hint, code = false, timeLimit, onF
 
   return (
     <div className="session">
-      <div ref={boxRef} className={`text-box ${code ? "is-code" : ""}`}>
-        {hint && <div className="hint">{hint}</div>}
+      <div ref={boxRef} className={`text-box ${code ? "is-code" : ""} ${para ? "is-para" : ""}`}>
+        {hint && !para && <div className="hint">{hint}</div>}
         <div ref={lineRef} className="text-line">
           {[...text].map((ch, i) => {
             const cls = i < pos ? (state.typed[i] === ch ? "ok" : "bad") : "todo";

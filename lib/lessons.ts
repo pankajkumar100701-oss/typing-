@@ -3,7 +3,7 @@
 import { C_PROGRAMS } from "./cPrograms";
 
 /** `hint` says where the keys are / which finger to use. `code` lessons keep line breaks. */
-export type Lesson = { id: string; title: string; hint: string; make: () => string; code?: boolean };
+export type Lesson = { id: string; title: string; hint: string; make: () => string; code?: boolean; para?: boolean };
 export type Section = { id: string; title: string; note: string; lessons: Lesson[] };
 
 const WORDS = `
@@ -116,6 +116,8 @@ const BOTTOM = "zxcvbnm,./";
 const cap = (w: string) => w[0].toUpperCase() + w.slice(1);
 
 const L = (id: string, title: string, hint: string, make: () => string): Lesson => ({ id, title, hint, make });
+/** Paragraph lesson: shown wrapped over a few lines instead of one sliding line. */
+const P = (id: string, title: string, hint: string, make: () => string): Lesson => ({ id, title, hint, make, para: true });
 
 export const SECTIONS: Section[] = [
   {
@@ -167,10 +169,10 @@ export const SECTIONS: Section[] = [
     title: "Advance",
     note: "Sentences, paragraphs and symbols",
     lessons: [
-      L("a1", "Sentences", "Keep a steady rhythm", () => shuffle(SENTENCES).slice(0, 3).join(" ")),
-      L("a2", "Paragraph", "Accuracy first, speed follows", () => shuffle(SENTENCES).slice(0, 5).join(" ")),
-      L("a3", "Long Paragraph", "Stay relaxed for the whole paragraph", () => shuffle(SENTENCES).slice(0, 8).join(" ")),
-      L("a4", "Symbols", "Symbols use Shift + the number row", () =>
+      P("a1", "Sentences", "Keep a steady rhythm", () => shuffle(SENTENCES).slice(0, 3).join(" ")),
+      P("a2", "Paragraph", "Accuracy first, speed follows", () => shuffle(SENTENCES).slice(0, 5).join(" ")),
+      P("a3", "Long Paragraph", "Stay relaxed for the whole paragraph", () => shuffle(SENTENCES).slice(0, 8).join(" ")),
+      P("a4", "Symbols", "Symbols use Shift + the number row", () =>
         Array.from({ length: 16 }, (_, i) => (i % 2 ? pick(SYMBOLS) : pick(WORDS))).join(" "),
       ),
     ],

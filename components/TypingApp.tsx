@@ -3,13 +3,12 @@
 import { useCallback, useState, useSyncExternalStore } from "react";
 import TypingSession, { SessionResult, fmtTime } from "./TypingSession";
 import { ALL_LESSONS, SECTIONS, makeText, sectionOf, testText } from "@/lib/lessons";
-import { getProgress, getServerProgress, saveResult, speedBand, subscribe } from "@/lib/progress";
+import { BANDS, getProgress, getServerProgress, saveResult, speedBand, subscribe } from "@/lib/progress";
 import { isMuted, isMutedOnServer, playComplete, subscribeSound, toggleMute } from "@/lib/sound";
 
 /** Either a lesson (by index) or a timed test (by minutes). */
 type Run = { round: number; text: string } & ({ kind: "lesson"; index: number } | { kind: "test"; minutes: number });
 
-const BAND_LABEL = { slow: "Keep practising", mid: "Good speed", fast: "Excellent speed" };
 const TEST_MINUTES = [1, 2, 3, 5, 10];
 
 async function goLandscape() {
@@ -30,7 +29,6 @@ export default function TypingApp() {
   const muted = useSyncExternalStore(subscribeSound, isMuted, isMutedOnServer);
 
   const lesson = run.kind === "lesson" ? ALL_LESSONS[run.index] : null;
-  const section = lesson ? sectionOf(lesson) : null;
 
   // Every start builds a new random text.
   const openLesson = useCallback((index: number) => {
@@ -45,7 +43,6 @@ export default function TypingApp() {
     setMenu(false);
   }, []);
 
-  const again = () => (run.kind === "lesson" ? openLesson(run.index) : openTest(run.minutes));
   const hasNext = run.kind === "lesson" && run.index + 1 < ALL_LESSONS.length;
   const id = lesson ? lesson.id : run.kind === "test" ? `test-${run.minutes}` : "";
 
@@ -58,9 +55,6 @@ export default function TypingApp() {
     [id],
   );
 
-  const title = lesson
-    ? `${section!.title} · Lesson ${section!.lessons.indexOf(lesson) + 1}`
-    : `Test · ${run.kind === "test" ? run.minutes : 0} min`;
 
   return (
     <div className="app">
@@ -69,6 +63,10 @@ export default function TypingApp() {
           <div className="rotate-phone" aria-hidden />
           <h2>Rotate your phone</h2>
           <p>TypeFast works best in landscape.</p>
+          <p className="kbd-tip">
+            ⌨ For real typing practice, please connect a keyboard with an <b>OTG cable</b> or <b>Bluetooth</b>. The on-screen
+            keyboard works too.
+          </p>
           <button className="btn primary" onClick={goLandscape}>
             Go landscape
           </button>
@@ -86,29 +84,15 @@ export default function TypingApp() {
         <span className="brand">
           type<b>fast</b>
         </span>
+        <span className="spacer" />
 
-        <div className="lesson-nav">
-          {run.kind === "lesson" && (
-            <button className="nav-btn" onClick={() => openLesson(run.index - 1)} disabled={run.index === 0} aria-label="Previous lesson">
-              ‹
-            </button>
-          )}
-          <button className="lesson-name" onClick={() => setMenu(true)}>
-            <small>{title}</small>
-            <span>{lesson ? lesson.title : "Typing test"}</span>
-          </button>
-          {run.kind === "lesson" && (
-            <button className="nav-btn" onClick={() => openLesson(run.index + 1)} disabled={!hasNext} aria-label="Next lesson">
-              ›
-            </button>
-          )}
-          <button className="nav-btn" onClick={again} aria-label="Restart with new text">
-            ↻
-          </button>
-        </div>
-
-        <button className="nav-btn" onClick={toggleMute} aria-label={muted ? "Turn sound on" : "Turn sound off"}>
-          {muted ? "🔇" : "🔊"}
+        <button
+          className={`sound-btn ${muted ? "off" : ""}`}
+          onClick={toggleMute}
+          aria-label={muted ? "Turn sound on" : "Turn sound off"}
+        >
+          <SoundIcon muted={muted} />
+          <span>{muted ? "Off" : "On"}</span>
         </button>
         <button className="nav-btn fs" onClick={goLandscape} aria-label="Fullscreen">
           ⤢
@@ -120,8 +104,6 @@ export default function TypingApp() {
           result={result}
           title={lesson ? lesson.title : "Typing test"}
           bestId={id}
-          isTest={run.kind === "test"}
-          onAgain={again}
           onNext={hasNext && run.kind === "lesson" ? () => openLesson(run.index + 1) : undefined}
           onMenu={() => setMenu(true)}
         />
@@ -131,6 +113,7 @@ export default function TypingApp() {
           text={run.text}
           hint={lesson?.hint ?? "Type as many words as you can before the time runs out"}
           code={lesson?.code}
+          para={run.kind === "test" || lesson?.para}
           timeLimit={run.kind === "test" ? run.minutes * 60 : undefined}
           onFinish={finish}
         />
@@ -242,10 +225,20 @@ function Menu({
               </section>
             );
           })}
-          <p className="legend">
-            Speed: <span className="best slow">under 30</span> <span className="best mid">30–49</span>{" "}
-            <span className="best fast">50+</span> wpm
-          </p>
+          <div className="legend">
+            <h4>Speed levels</h4>
+            {(["slow", "mid", "fast"] as const).map((band) => (
+              <div key={band} className={`band ${band}`}>
+                <span className="band-dot" />
+                <span className="band-text">
+                  <b>
+                    {BANDS[band].name} <small>{BANDS[band].range}</small>
+                  </b>
+                  <span>{BANDS[band].line}</span>
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       </aside>
     </div>
@@ -256,16 +249,12 @@ function ResultPage({
   result,
   title,
   bestId,
-  isTest,
-  onAgain,
   onNext,
   onMenu,
 }: {
   result: SessionResult;
   title: string;
   bestId: string;
-  isTest: boolean;
-  onAgain: () => void;
   onNext?: () => void;
   onMenu: () => void;
 }) {
@@ -285,7 +274,8 @@ function ResultPage({
           <span className="label">Speed</span>
           <b>{result.wpm}</b>
           <span className="unit">wpm</span>
-          <span className="verdict">{BAND_LABEL[band]}</span>
+          <span className="verdict">{BANDS[band].name}</span>
+          <span className="motivation">{BANDS[band].line}</span>
         </div>
         <div className="result-side">
           <h2>
@@ -305,9 +295,6 @@ function ResultPage({
             <button className="btn" onClick={onMenu}>
               Menu
             </button>
-            <button className="btn" onClick={onAgain}>
-              {isTest ? "Test again" : "Try again"}
-            </button>
             {onNext && (
               <button className="btn primary" onClick={onNext}>
                 Next lesson →
@@ -326,5 +313,21 @@ function Cell({ label, value, tone }: { label: string; value: string; tone?: "go
       <span className="cell-label">{label}</span>
       <span className="cell-value">{value}</span>
     </div>
+  );
+}
+
+function SoundIcon({ muted }: { muted: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor" stroke="none" />
+      {muted ? (
+        <path d="M17 9l5 6M22 9l-5 6" />
+      ) : (
+        <>
+          <path d="M16.5 8.5a5 5 0 0 1 0 7" />
+          <path d="M19.5 5.5a9 9 0 0 1 0 13" />
+        </>
+      )}
+    </svg>
   );
 }
