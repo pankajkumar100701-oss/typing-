@@ -153,6 +153,30 @@ button:disabled {
 .sound-btn.off {
   color: var(--muted);
 }
+/* On-screen keyboard: hidden on touch screens unless the user shows it. */
+.app.kbd-hide .kbd {
+  display: none;
+}
+.kbd-btn .kbd-state::after {
+  content: "On";
+}
+.app.kbd-hide .kbd-btn {
+  color: var(--muted);
+}
+.app.kbd-hide .kbd-btn .kbd-state::after {
+  content: "Off";
+}
+@media (pointer: coarse) {
+  .app.kbd-auto .kbd {
+    display: none;
+  }
+  .app.kbd-auto .kbd-btn {
+    color: var(--muted);
+  }
+  .app.kbd-auto .kbd-btn .kbd-state::after {
+    content: "Off";
+  }
+}
 .menu-btn {
   display: flex;
   align-items: center;
@@ -264,6 +288,11 @@ button:disabled {
   font-feature-settings: "liga" 0, "calt" 0;
   font-size: clamp(22px, 4.2vw, 40px);
   padding-left: 16px;
+  container-type: size;
+}
+/* single-line lessons grow when the box is tall (keyboard hidden) */
+.text-box:not(.is-code):not(.is-para) > .text-line {
+  font-size: clamp(22px, min(4.2vw, 24cqh), 56px);
 }
 .hint {
   position: absolute;

@@ -84,3 +84,39 @@ export const playComplete = () =>
     });
     tone(1318.5, 0.5, 0.9, "sine", 0.08); // E6 sparkle at the end
   });
+
+// On-screen keyboard preference: "auto" hides it on touch screens (phone + OTG keyboard),
+// "show"/"hide" are the user's explicit choice.
+export type KbdPref = "auto" | "show" | "hide";
+const KBD_KEY = "typefast:kbd";
+let kbd: KbdPref | null = null;
+
+export function getKbdPref(): KbdPref {
+  if (kbd === null) {
+    try {
+      const v = localStorage.getItem(KBD_KEY);
+      kbd = v === "show" || v === "hide" ? v : "auto";
+    } catch {
+      kbd = "auto";
+    }
+  }
+  return kbd;
+}
+
+export function getKbdPrefOnServer(): KbdPref {
+  return "auto";
+}
+
+/** Flip whatever is currently visible. */
+export function toggleKbd() {
+  const touch = window.matchMedia("(pointer: coarse)").matches;
+  const pref = getKbdPref();
+  const visible = pref === "show" || (pref === "auto" && !touch);
+  kbd = visible ? "hide" : "show";
+  try {
+    localStorage.setItem(KBD_KEY, kbd);
+  } catch {
+    // storage blocked — the setting lasts for this visit only
+  }
+  listeners.forEach((l) => l());
+}

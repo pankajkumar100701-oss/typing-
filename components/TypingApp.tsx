@@ -4,7 +4,16 @@ import { useCallback, useState, useSyncExternalStore } from "react";
 import TypingSession, { SessionResult, fmtTime } from "./TypingSession";
 import { ALL_LESSONS, SECTIONS, makeText, sectionOf, testText } from "@/lib/lessons";
 import { BANDS, getProgress, getServerProgress, saveResult, speedBand, subscribe } from "@/lib/progress";
-import { isMuted, isMutedOnServer, playComplete, subscribeSound, toggleMute } from "@/lib/sound";
+import {
+  getKbdPref,
+  getKbdPrefOnServer,
+  isMuted,
+  isMutedOnServer,
+  playComplete,
+  subscribeSound,
+  toggleKbd,
+  toggleMute,
+} from "@/lib/sound";
 
 /** Either a lesson (by index) or a timed test (by minutes). */
 type Run = { round: number; text: string } & ({ kind: "lesson"; index: number } | { kind: "test"; minutes: number });
@@ -27,6 +36,7 @@ export default function TypingApp() {
   const [menu, setMenu] = useState(false);
   const [rotateDismissed, setRotateDismissed] = useState(false);
   const muted = useSyncExternalStore(subscribeSound, isMuted, isMutedOnServer);
+  const kbdPref = useSyncExternalStore(subscribeSound, getKbdPref, getKbdPrefOnServer);
 
   const lesson = run.kind === "lesson" ? ALL_LESSONS[run.index] : null;
 
@@ -57,7 +67,7 @@ export default function TypingApp() {
 
 
   return (
-    <div className="app">
+    <div className={`app kbd-${kbdPref}`}>
       {!rotateDismissed && (
         <div className="rotate-overlay">
           <div className="rotate-phone" aria-hidden />
@@ -86,6 +96,10 @@ export default function TypingApp() {
         </span>
         <span className="spacer" />
 
+        <button className="sound-btn kbd-btn" onClick={toggleKbd} aria-label="Show or hide the on-screen keyboard">
+          <KeyboardIcon />
+          <span className="kbd-state" />
+        </button>
         <button
           className={`sound-btn ${muted ? "off" : ""}`}
           onClick={toggleMute}
@@ -328,6 +342,15 @@ function SoundIcon({ muted }: { muted: boolean }) {
           <path d="M19.5 5.5a9 9 0 0 1 0 13" />
         </>
       )}
+    </svg>
+  );
+}
+
+function KeyboardIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
+      <rect x="2.5" y="6" width="19" height="12" rx="2" />
+      <path d="M6 10h.01M9 10h.01M12 10h.01M15 10h.01M18 10h.01M6.5 14h11" />
     </svg>
   );
 }
