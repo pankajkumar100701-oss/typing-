@@ -1,6 +1,6 @@
 "use client";
 
-import { memo } from "react";
+import { memo, type Ref } from "react";
 
 export type KeyAction = { type: "char"; char: string } | { type: "shift" } | { type: "tab" } | { type: "backspace" };
 
@@ -80,12 +80,12 @@ export function keyIdForEventKey(key: string): string | undefined {
 type Props = {
   nextChar?: string;
   shift: boolean;
-  pressedId?: string;
-  wrongId?: string;
+  /** Pressed/wrong flashes are added straight to the keys (`data-key`) by the session. */
+  boxRef?: Ref<HTMLDivElement>;
   onAction: (action: KeyAction) => void;
 };
 
-function Keyboard({ nextChar, shift, pressedId, wrongId, onAction }: Props) {
+function Keyboard({ nextChar, shift, boxRef, onAction }: Props) {
   const hint = keyFor(nextChar);
 
   const press = (key: KeyDef) => {
@@ -110,17 +110,18 @@ function Keyboard({ nextChar, shift, pressedId, wrongId, onAction }: Props) {
   };
 
   return (
-    <div className="kbd" role="group" aria-label="On-screen keyboard">
+    <div ref={boxRef} className="kbd" role="group" aria-label="On-screen keyboard">
       {ROWS.map((row, r) => (
         <div className="kbd-row" key={r}>
           {row.map((key) => {
             const isNext = hint?.id === key.id || hint?.shiftId === key.id;
-            const active = (key.kind === "shift" && shift) || pressedId === key.id;
+            const active = key.kind === "shift" && shift;
             const isLetter = !key.kind && /[a-z]/.test(key.label);
             const showUpper = isLetter && shift;
             return (
               <button
                 key={key.id}
+                data-key={key.id}
                 type="button"
                 tabIndex={-1}
                 className={[
@@ -129,7 +130,6 @@ function Keyboard({ nextChar, shift, pressedId, wrongId, onAction }: Props) {
                   key.kind ? `key-${key.kind}` : "",
                   isNext ? "is-next" : "",
                   active ? "is-active" : "",
-                  wrongId === key.id ? "is-wrong" : "",
                 ].join(" ")}
                 style={{ flexGrow: key.w ?? 1 }}
                 onPointerDown={(e) => {

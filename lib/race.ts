@@ -189,7 +189,7 @@ export class Race {
 
   start(words: number) {
     if (!this.view.isHost) return;
-    const text = makeText(RACE_LESSON, Date.now(), words);
+    const text = makeText(RACE_LESSON, (Math.random() * 2 ** 32) | 0, Math.min(300, Math.max(5, words)));
     const players = this.view.room.players.map((p) => ({ ...p, correct: 0, wpm: 0, acc: 100, place: null, waiting: false }));
     this.hostGoAt = performance.now() + COUNTDOWN_MS;
     this.view.goAt = this.hostGoAt;

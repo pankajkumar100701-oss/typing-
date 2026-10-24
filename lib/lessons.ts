@@ -110,16 +110,71 @@ function drill(keys: string, known: string): string {
   return out.join(" ");
 }
 
-/** Random sentences joined until the paragraph has at least `target` words. */
+// Parts for building fresh sentences, so paragraphs don't keep repeating the same lines.
+const WHO = [
+  "Riya", "Aman", "Neha", "Kabir", "Meera", "Arjun", "Sara", "Dev", "Priya", "Rohan", "Anya", "Vikram", "Zoya", "Imran",
+  "my sister", "our teacher", "the old farmer", "a little boy", "the young doctor", "my best friend", "the shopkeeper",
+  "our neighbour", "the bus driver", "a tired student", "the new girl", "my uncle", "the village cook", "a quiet painter",
+];
+/** [past, base] */
+const DO = [
+  ["found", "find"], ["painted", "paint"], ["carried", "carry"], ["cleaned", "clean"], ["bought", "buy"], ["fixed", "fix"],
+  ["opened", "open"], ["wrote", "write"], ["cooked", "cook"], ["sold", "sell"], ["lost", "lose"], ["watched", "watch"],
+  ["built", "build"], ["moved", "move"], ["washed", "wash"], ["packed", "pack"], ["shared", "share"], ["borrowed", "borrow"],
+  ["dropped", "drop"], ["hid", "hide"], ["checked", "check"], ["picked up", "pick up"], ["sent", "send"], ["kept", "keep"],
+];
+const WHAT = [
+  "a red kite", "an old map", "two fresh mangoes", "a broken clock", "the heavy box", "a long letter", "a small boat",
+  "three green bottles", "a warm blanket", "the blue bicycle", "a funny poem", "a cup of tea", "a bag of rice",
+  "a paper plane", "an empty jar", "a silver coin", "the wooden door", "a new phone", "a basket of eggs", "the torn kite",
+  "a box of crayons", "an umbrella", "the cricket bat", "a jar of honey", "a bunch of keys", "a sleepy puppy", "the radio",
+];
+const WHERE = [
+  "near the river", "in the kitchen", "at the station", "behind the school", "on the roof", "inside the old temple",
+  "by the lake", "in the busy market", "under the big tree", "at the bus stop", "in the library", "on the hill",
+  "at the park", "beside the road", "in the garden", "near the gate", "on the train", "at the fair", "by the window",
+];
+const WHEN = [
+  "this morning", "last night", "before lunch", "after the rain", "on Sunday", "at noon", "every evening", "in the winter",
+  "yesterday", "just before dark", "during the holidays", "at sunrise", "after school", "on a cold day", "in a hurry",
+];
+const HOW = ["and smiled", "and went home", "without a word", "with great care", "very quickly", "for the first time", "with a laugh", "before anyone saw"];
+
+const cap1 = (s: string) => s[0].toUpperCase() + s.slice(1);
+
+/** One new sentence from the parts above — thousands of combinations. */
+function freshSentence(): string {
+  const who = pick(WHO);
+  const [did, doIt] = pick(DO);
+  const what = pick(WHAT);
+  switch (Math.floor(rnd() * 6)) {
+    case 0:
+      return `${cap1(who)} ${did} ${what} ${pick(WHERE)} ${pick(WHEN)}.`;
+    case 1:
+      return `${cap1(pick(WHEN))}, ${who} ${did} ${what} ${pick(HOW)}.`;
+    case 2:
+      return `${cap1(who)} and ${pick(WHO.filter((w) => w !== who))} ${did} ${what} ${pick(WHERE)}.`;
+    case 3:
+      return `Why did ${who} ${doIt} ${what} ${pick(WHERE)}?`;
+    case 4:
+      return `"Let us ${doIt} ${what} ${pick(WHEN)}," said ${who}.`;
+    default:
+      return `${cap1(pick(WHERE))}, ${who} ${did} ${what}, and nobody knew why!`;
+  }
+}
+
+/** Random sentences — mostly freshly built, some from the list — until about `target` words. */
 function paragraph(target: number): string {
   const out: string[] = [];
   let count = 0;
-  while (count < target) {
-    for (const sentence of shuffle(SENTENCES)) {
-      out.push(sentence);
-      count += sentence.split(" ").length;
-      if (count >= target) break;
-    }
+  let bank = shuffle(SENTENCES);
+  // Whole sentences only, so stop once close enough rather than adding a long extra one.
+  while (count < target * 0.85) {
+    if (!bank.length) bank = shuffle(SENTENCES);
+    const sentence = rnd() < 0.7 ? freshSentence() : bank.pop()!;
+    if (out.includes(sentence)) continue;
+    out.push(sentence);
+    count += sentence.split(" ").length;
   }
   return out.join(" ");
 }

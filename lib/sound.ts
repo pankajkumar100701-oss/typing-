@@ -50,22 +50,49 @@ function tone(freq: number, start: number, duration: number, type: OscillatorTyp
   osc.stop(t + duration + 0.02);
 }
 
+function getCtx() {
+  ctx ??= new AudioContext({ latencyHint: "interactive" });
+  if (ctx.state !== "running") void ctx.resume().catch(() => {});
+  return ctx;
+}
+
+/**
+ * Phones only allow sound after a real tap or key press (a touch "pointerdown" doesn't count),
+ * so wake the audio on the first one of those instead of on the first on-screen key.
+ */
+export function primeAudio() {
+  const wake = () => {
+    try {
+      getCtx();
+    } catch {
+      // audio unavailable
+    }
+  };
+  const events = ["pointerup", "touchend", "keydown", "click"] as const;
+  events.forEach((e) => window.addEventListener(e, wake, { capture: true, passive: true }));
+  return () => events.forEach((e) => window.removeEventListener(e, wake, { capture: true }));
+}
+
 function play(fn: () => void) {
   if (isMuted()) return;
   try {
-    ctx ??= new AudioContext();
-    if (ctx.state === "suspended") void ctx.resume();
-    fn();
+    // While audio is still waking up, skip the sound — otherwise all the queued clicks
+    // would play at once in a crackly burst.
+    if (getCtx().state === "running") fn();
   } catch {
     // audio unavailable — stay silent
   }
 }
 
-/** Soft click for a correct key (slightly varied so it doesn't sound robotic). */
-export const playKey = () => play(() => tone(1700 + Math.random() * 300, 0, 0.035, "triangle", 0.05));
+/** Soft "tock" for a correct key (slightly varied so it doesn't sound robotic). */
+export const playKey = () =>
+  play(() => {
+    tone(1100 + Math.random() * 200, 0, 0.04, "triangle", 0.09);
+    tone(320, 0, 0.03, "sine", 0.06); // a little body so phone speakers don't sound tinny
+  });
 
 /** Quieter click for backspace. */
-export const playBack = () => play(() => tone(900, 0, 0.03, "triangle", 0.035));
+export const playBack = () => play(() => tone(700, 0, 0.035, "triangle", 0.06));
 
 /** Low double buzz for a wrong key. */
 export const playError = () =>
@@ -88,8 +115,8 @@ export const playComplete = () =>
     tone(1318.5, 0.5, 0.9, "sine", 0.08); // E6 sparkle at the end
   });
 
-// On-screen keyboard preference: "auto" hides it on touch screens (phone + OTG keyboard),
-// "show"/"hide" are the user's explicit choice.
+// On-screen keyboard preference: "auto" shows it until a real keyboard (OTG/Bluetooth or a
+// laptop's) is typed on, then hides it for this visit; "show"/"hide" are the user's explicit choice.
 export type KbdPref = "auto" | "show" | "hide";
 const KBD_KEY = "typefast:kbd";
 let kbd: KbdPref | null = null;
@@ -110,12 +137,16 @@ export function getKbdPrefOnServer(): KbdPref {
   return "auto";
 }
 
+/** A real key was pressed on a touch screen: an OTG/Bluetooth keyboard is in use. */
+export function noteHardwareKey() {
+  if (getKbdPref() !== "auto" || !window.matchMedia("(pointer: coarse)").matches) return;
+  kbd = "hide"; // not saved — next visit starts with the on-screen keyboard again
+  listeners.forEach((l) => l());
+}
+
 /** Flip whatever is currently visible. */
 export function toggleKbd() {
-  const touch = window.matchMedia("(pointer: coarse)").matches;
-  const pref = getKbdPref();
-  const visible = pref === "show" || (pref === "auto" && !touch);
-  kbd = visible ? "hide" : "show";
+  kbd = getKbdPref() === "hide" ? "show" : "hide";
   try {
     localStorage.setItem(KBD_KEY, kbd);
   } catch {

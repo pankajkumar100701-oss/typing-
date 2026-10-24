@@ -25,13 +25,13 @@ type Run = { round: number; text: string } & ({ kind: "lesson"; index: number } 
 
 const TEST_MINUTES = [1, 2, 3, 5, 10];
 
-async function goLandscape() {
+/** Fullscreen on/off. Works held upright or sideways — the layout follows the phone. */
+async function toggleFullscreen() {
   try {
-    if (!document.fullscreenElement) await document.documentElement.requestFullscreen({ navigationUI: "hide" });
-    const orientation = screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> };
-    await orientation.lock?.("landscape");
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else await document.documentElement.requestFullscreen({ navigationUI: "hide" });
   } catch {
-    // iOS Safari and desktop can't lock orientation — the user rotates by hand
+    // iOS Safari has no fullscreen for pages
   }
 }
 
@@ -39,7 +39,6 @@ export default function TypingApp() {
   const [run, setRun] = useState<Run>(() => ({ kind: "lesson", index: 0, text: makeText(ALL_LESSONS[0], 1), round: 0 }));
   const [result, setResult] = useState<SessionResult | null>(null);
   const [menu, setMenu] = useState(false);
-  const [rotateDismissed, setRotateDismissed] = useState(false);
   const muted = useSyncExternalStore(subscribeSound, isMuted, isMutedOnServer);
   const kbdPref = useSyncExternalStore(subscribeSound, getKbdPref, getKbdPrefOnServer);
   const wordCount = useSyncExternalStore(subscribeSound, getWordCount, getWordCountOnServer);
@@ -87,24 +86,6 @@ export default function TypingApp() {
 
   return (
     <div className={`app kbd-${kbdPref}`}>
-      {!rotateDismissed && (
-        <div className="rotate-overlay">
-          <div className="rotate-phone" aria-hidden />
-          <h2>Rotate your phone</h2>
-          <p>TypeFast works best in landscape.</p>
-          <p className="kbd-tip">
-            ⌨ For real typing practice, please connect a keyboard with an <b>OTG cable</b> or <b>Bluetooth</b>. The on-screen
-            keyboard works too.
-          </p>
-          <button className="btn primary" onClick={goLandscape}>
-            Go landscape
-          </button>
-          <button className="btn ghost" onClick={() => setRotateDismissed(true)}>
-            Continue anyway
-          </button>
-        </div>
-      )}
-
       {/* Drop focus after a toolbar click so typed keys never re-press a button. */}
       <header className="toolbar" onClick={() => (document.activeElement as HTMLElement | null)?.blur()}>
         <button className="menu-btn" onClick={() => setMenu(true)}>
@@ -127,7 +108,7 @@ export default function TypingApp() {
           <SoundIcon muted={muted} />
           <span>{muted ? "Off" : "On"}</span>
         </button>
-        <button className="nav-btn fs" onClick={goLandscape} aria-label="Fullscreen">
+        <button className="nav-btn fs" onClick={toggleFullscreen} aria-label="Fullscreen">
           ⤢
         </button>
       </header>

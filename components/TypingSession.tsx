@@ -3,7 +3,7 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState } from "react";
 import Keyboard, { KeyAction, keyFor, keyIdForEventKey } from "./Keyboard";
 import { speedBand } from "@/lib/progress";
-import { playBack, playError, playKey } from "@/lib/sound";
+import { noteHardwareKey, playBack, playError, playKey, primeAudio } from "@/lib/sound";
 
 export type SessionResult = {
   wpm: number;
@@ -28,7 +28,7 @@ type State = {
 };
 
 type Action =
-  | { type: "type"; char: string; at: number; text: string; code: boolean }
+  | { type: "type"; char: string; at: number; text: string; code: boolean; strict: boolean }
   | { type: "tab"; text: string }
   | { type: "back"; word: boolean }
   | { type: "timeup"; at: number };
@@ -54,8 +54,12 @@ function reducer(state: State, action: Action): State {
     const cut = action.word ? state.typed.replace(/\S*\s?$/, "") : state.typed.slice(0, -1);
     return { ...state, typed: cut, auto: state.auto.filter((i) => i < cut.length) };
   }
-  const { char, at, text, code } = action;
+  const { char, at, text, code, strict } = action;
   if (state.typed.length >= text.length) return state;
+  // Strict (car race): a wrong key is counted as a mistake but doesn't move you on.
+  if (strict && char !== text[state.typed.length]) {
+    return { ...state, keystrokes: state.keystrokes + 1, mistakes: state.mistakes + 1, startedAt: state.startedAt ?? at };
+  }
   let typed = state.typed + char;
   const auto = [...state.auto];
   // In code, the next line's indentation is typed for you after a correct Enter.
@@ -114,48 +118,60 @@ type Props = {
   onFinish: (result: SessionResult) => void;
   /** Called with the number of correct letters whenever the typed text changes (car race). */
   onProgress?: (correct: number) => void;
+  /** Only the right key moves you on (car race): the car never moves on a mistake. */
+  strict?: boolean;
 };
 
-export default function TypingSession({ text, hint, code = false, para = false, timeLimit, onFinish, onProgress }: Props) {
+export default function TypingSession({ text, hint, code = false, para = false, timeLimit, onFinish, onProgress, strict = false }: Props) {
   const [state, dispatch] = useReducer(reducer, INITIAL);
   const [shift, setShift] = useState(false);
-  const [pressedId, setPressedId] = useState<string>();
-  const [wrongId, setWrongId] = useState<string>();
 
   const boxRef = useRef<HTMLDivElement>(null);
   const lineRef = useRef<HTMLDivElement>(null);
   const caretRef = useRef<HTMLDivElement>(null);
+  const kbdRef = useRef<HTMLDivElement>(null);
   const finished = state.finishedAt !== null;
   const pos = state.typed.length;
 
-  const flash = useCallback((setter: typeof setPressedId, id: string | undefined, ms: number) => {
-    setter(id);
-    window.setTimeout(() => setter((cur) => (cur === id ? undefined : cur)), ms);
+  useEffect(primeAudio, []);
+
+  // Key flashes go straight to the DOM (a data attribute React doesn't touch), so the
+  // keyboard isn't re-rendered twice more for every letter.
+  const flash = useCallback((el: HTMLElement | null | undefined, kind: "active" | "wrong" | "miss", ms: number) => {
+    if (!el) return;
+    el.dataset.flash = kind;
+    window.setTimeout(() => el.dataset.flash === kind && delete el.dataset.flash, ms);
   }, []);
+  const flashKey = useCallback(
+    (id: string | undefined, kind: "active" | "wrong", ms: number) =>
+      flash(id ? kbdRef.current?.querySelector<HTMLElement>(`[data-key="${CSS.escape(id)}"]`) : null, kind, ms),
+    [flash],
+  );
 
   const typeChar = useCallback(
     (char: string, keyId?: string) => {
       if (pos >= text.length) return;
       if (char !== text[pos]) {
-        flash(setWrongId, keyFor(char)?.id ?? keyId, 220);
+        flashKey(keyFor(char)?.id ?? keyId, "wrong", 220);
+        if (strict) flash(caretRef.current, "miss", 260);
         navigator.vibrate?.(30);
         playError();
       } else {
-        if (keyId) flash(setPressedId, keyId, 110);
+        flashKey(keyId, "active", 110);
         playKey();
       }
-      dispatch({ type: "type", char, at: performance.now(), text, code });
+      dispatch({ type: "type", char, at: performance.now(), text, code, strict });
     },
-    [flash, pos, text, code],
+    [flash, flashKey, pos, text, code, strict],
   );
 
   const backspace = useCallback(
     (word: boolean) => {
-      flash(setPressedId, "backspace", 110);
+      flashKey("backspace", "active", 110);
       if (pos > 0) playBack();
       dispatch({ type: "back", word });
     },
-    [flash, pos],
+    [flashKey, pos],
   );
 
   // The time limit for tests (the live clock itself ticks inside StatusBar).
@@ -197,8 +213,11 @@ export default function TypingSession({ text, hint, code = false, para = false, 
           : `translateX(${-Math.max(0, left - boxW * 0.35)}px)`;
     };
     place();
-    window.addEventListener("resize", place);
-    return () => window.removeEventListener("resize", place);
+    // Re-place when the box or the text changes size (phone rotated, keyboard shown or hidden).
+    const resize = new ResizeObserver(place);
+    if (boxRef.current) resize.observe(boxRef.current);
+    if (lineRef.current) resize.observe(lineRef.current);
+    return () => resize.disconnect();
   }, [pos, text, code, para]);
 
   // Report the result once.
@@ -243,6 +262,8 @@ export default function TypingSession({ text, hint, code = false, para = false, 
     const onKey = (e: KeyboardEvent) => {
       const { backspace, typeChar, text } = handlers.current;
       if (e.metaKey) return;
+      // Phone soft keyboards send "Unidentified"; a named key means a real keyboard.
+      if (e.key !== "Unidentified" && !e.repeat) noteHardwareKey();
       if (e.target instanceof HTMLElement && e.target.closest("input, textarea")) return;
       if (e.key === "Backspace") {
         e.preventDefault();
@@ -273,7 +294,7 @@ export default function TypingSession({ text, hint, code = false, para = false, 
 
       <StatusBar state={state} text={text} timeLimit={timeLimit} />
 
-      <Keyboard nextChar={finished ? undefined : text[pos]} shift={shift} pressedId={pressedId} wrongId={wrongId} onAction={handleAction} />
+      <Keyboard nextChar={finished ? undefined : text[pos]} shift={shift} boxRef={kbdRef} onAction={handleAction} />
     </div>
   );
 }

@@ -13,6 +13,7 @@ import {
   isMutedOnServer,
   playComplete,
   playCount,
+  primeAudio,
   subscribeSound,
   toggleKbd,
   toggleMute,
@@ -44,6 +45,7 @@ export default function RaceApp() {
   const raceRef = useRef<Race | null>(null);
 
   useEffect(() => () => raceRef.current?.destroy(), []);
+  useEffect(primeAudio, []);
 
   const begin = (host: boolean) => {
     const clean = cleanName(name ?? storedName);
@@ -184,6 +186,7 @@ function RaceRoom({ view, race }: { view: RaceView; race: Race }) {
   const { room, myId, isHost, goAt, status } = view;
   const me = room.players.find((p) => p.id === myId);
   const [words, setWords] = useState(RACE_WORDS[1]);
+  const [customWords, setCustomWords] = useState("");
   // My own car follows my typing straight away instead of waiting for the host's echo.
   const [mine, setMine] = useState({ round: 0, correct: 0, done: false });
   const [goRound, setGoRound] = useState(0);
@@ -244,10 +247,32 @@ function RaceRoom({ view, race }: { view: RaceView; race: Race }) {
                 <div className="race-setup">
                   <span className="muted">Paragraph</span>
                   {RACE_WORDS.map((n) => (
-                    <button key={n} className={`chip ${words === n ? "on" : ""}`} onClick={() => setWords(n)}>
+                    <button
+                      key={n}
+                      className={`chip ${words === n && !customWords ? "on" : ""}`}
+                      onClick={() => {
+                        setCustomWords("");
+                        setWords(n);
+                      }}
+                    >
                       {n} words
                     </button>
                   ))}
+                  <input
+                    className={`race-custom ${customWords ? "on" : ""}`}
+                    type="number"
+                    inputMode="numeric"
+                    min={5}
+                    max={300}
+                    placeholder="Custom"
+                    value={customWords}
+                    onChange={(e) => {
+                      setCustomWords(e.target.value);
+                      const n = Math.round(Number(e.target.value));
+                      if (n > 0) setWords(Math.min(300, Math.max(5, n)));
+                    }}
+                    aria-label="Custom number of words"
+                  />
                 </div>
                 <div className="race-actions">
                   {room.phase === "done" && <ShareLink link={shareLink} compact />}
@@ -273,7 +298,7 @@ function RaceRoom({ view, race }: { view: RaceView; race: Race }) {
               <p className="muted wait">A race is on. You&apos;ll join from the next round — watch the cars!</p>
             </div>
           ) : canType ? (
-            <TypingSession key={room.round} text={room.text} para onFinish={onFinish} onProgress={onProgress} />
+            <TypingSession key={room.round} text={room.text} para strict onFinish={onFinish} onProgress={onProgress} />
           ) : myRound.done ? (
             <div className="race-panel">
               <div className="race-card">
