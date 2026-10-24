@@ -1,9 +1,8 @@
 "use client";
 
-import { memo, useState, useSyncExternalStore, type Ref } from "react";
+import { memo, type Ref } from "react";
 
-/** `id` is the on-screen key that was pressed, so it is the one that flashes. */
-export type KeyAction = { type: "char"; char: string; id?: string } | { type: "shift" } | { type: "tab" } | { type: "backspace" };
+export type KeyAction = { type: "char"; char: string } | { type: "shift" } | { type: "tab" } | { type: "backspace" };
 
 type KeyDef = {
   id: string;
@@ -11,9 +10,7 @@ type KeyDef = {
   shifted?: string;
   finger: number; // 0-3 left pinky..index, 4-7 right index..pinky, 8 thumbs
   w?: number;
-  kind?: "shift" | "tab" | "enter" | "space" | "blank" | "backspace" | "page";
-  /** Page keys (phone layout): which page they open. */
-  to?: Page;
+  kind?: "shift" | "tab" | "enter" | "space" | "blank" | "backspace";
 };
 
 const k = (label: string, finger: number, shifted?: string): KeyDef => ({ id: label, label, shifted, finger });
@@ -43,57 +40,6 @@ const ROWS: KeyDef[][] = [
   ],
   [{ id: "space", label: "space", finger: 8, w: 1, kind: "space" }],
 ];
-
-// Phone held upright: a phone-style keyboard — letters on one page, numbers and symbols on two more.
-type Page = "abc" | "123" | "sym";
-const sym = (label: string): KeyDef => ({ id: `p${label}`, label, finger: 8 });
-const page = (label: string, to: Page, w = 1.5): KeyDef => ({ id: `page-${to}`, label, finger: 8, w, kind: "page", to });
-const P_BACK: KeyDef = { id: "backspace", label: "⌫", finger: 7, w: 1.5, kind: "backspace" };
-const pBottom = (to: Page, label: string): KeyDef[] => [
-  page(label, to),
-  { ...sym(","), id: "," },
-  { id: "space", label: "space", finger: 8, w: 4.5, kind: "space" },
-  { ...sym("."), id: "." },
-  { id: "enter", label: "↵", finger: 7, w: 1.5, kind: "enter" },
-];
-const PHONE: Record<Page, KeyDef[][]> = {
-  abc: [
-    [..."qwertyuiop"].map((c) => k(c, 8)),
-    [..."asdfghjkl"].map((c) => k(c, 8)),
-    [{ id: "lshift", label: "⇧", finger: 0, w: 1.5, kind: "shift" }, ...[..."zxcvbnm"].map((c) => k(c, 8)), P_BACK],
-    pBottom("123", "?123"),
-  ],
-  "123": [
-    [..."1234567890"].map(sym),
-    [..."@#$_&-+()/"].map(sym),
-    [page("=\\<", "sym"), ...[..."*\"':;!?"].map(sym), P_BACK],
-    pBottom("abc", "ABC"),
-  ],
-  sym: [
-    [..."~`|^={}[]\\"].map(sym),
-    [..."<>%#@&$+-_"].map(sym),
-    [page("?123", "123"), ...[..."*\"':;!?"].map(sym), P_BACK],
-    pBottom("abc", "ABC"),
-  ],
-};
-
-/** Which phone key (and page) types a character. */
-function phoneKeyFor(char: string | undefined): { id: string; page: Page; shift: boolean } | undefined {
-  if (char === undefined) return undefined;
-  if (char === " ") return { id: "space", page: "abc", shift: false };
-  if (char === "\n") return { id: "enter", page: "abc", shift: false };
-  if (char === "," || char === ".") return { id: char, page: "abc", shift: false };
-  if (/[a-z]/.test(char)) return { id: char, page: "abc", shift: false };
-  if (/[A-Z]/.test(char)) return { id: char.toLowerCase(), page: "abc", shift: true };
-  for (const p of ["123", "sym"] as const) if (PHONE[p].some((row) => row.some((key) => key.label === char && !key.kind))) return { id: `p${char}`, page: p, shift: false };
-}
-
-const PORTRAIT = "(orientation: portrait) and (max-width: 820px)";
-const subscribePortrait = (cb: () => void) => {
-  const mq = window.matchMedia(PORTRAIT);
-  mq.addEventListener("change", cb);
-  return () => mq.removeEventListener("change", cb);
-};
 
 const CHAR_MAP = new Map<string, { id: string; shift: boolean; finger: number }>();
 for (const row of ROWS) {
@@ -139,70 +85,7 @@ type Props = {
   onAction: (action: KeyAction) => void;
 };
 
-function Keyboard(props: Props) {
-  const portrait = useSyncExternalStore(subscribePortrait, () => window.matchMedia(PORTRAIT).matches, () => false);
-  return portrait ? <PhoneKeyboard {...props} /> : <FullKeyboard {...props} />;
-}
-
-function PhoneKeyboard({ nextChar, shift, boxRef, onAction }: Props) {
-  const [current, setPage] = useState<Page>("abc");
-  const want = phoneKeyFor(nextChar);
-  // The next key glows; if it's on another page, the key that opens that page glows instead.
-  const here = want && PHONE[current].some((row) => row.some((key) => key.id === want.id));
-  const hintId = !want || here ? want?.id : want.page === "abc" ? "page-abc" : current === "abc" ? "page-123" : `page-${want.page}`;
-
-  const press = (key: KeyDef) => {
-    switch (key.kind) {
-      case "page":
-        return setPage(key.to!);
-      case "shift":
-        return onAction({ type: "shift" });
-      case "enter":
-        return onAction({ type: "char", char: "\n", id: "enter" });
-      case "space":
-        // Like a phone: after a space you're back on the letters.
-        setPage("abc");
-        return onAction({ type: "char", char: " ", id: "space" });
-      case "backspace":
-        return onAction({ type: "backspace" });
-    }
-    const isLetter = /[a-z]/.test(key.label);
-    onAction({ type: "char", char: isLetter && shift ? key.label.toUpperCase() : key.label, id: key.id });
-  };
-
-  return (
-    <div ref={boxRef} className="kbd phone" role="group" aria-label="On-screen keyboard">
-      {PHONE[current].map((row, r) => (
-        <div className="kbd-row" key={`${current}${r}`}>
-          {row.map((key) => {
-            const isLetter = !key.kind && /[a-z]/.test(key.label);
-            const isNext = hintId === key.id || (key.kind === "shift" && here && want?.shift && !shift);
-            // Same finger colours as the full keyboard.
-            const finger = key.kind ? key.finger : (CHAR_MAP.get(key.label)?.finger ?? key.finger);
-            return (
-              <button
-                key={key.id}
-                data-key={key.id}
-                type="button"
-                tabIndex={-1}
-                className={["key", `f${finger}`, key.kind ? `key-${key.kind}` : "", isNext ? "is-next" : "", key.kind === "shift" && shift ? "is-active" : ""].join(" ")}
-                style={{ flexGrow: key.w ?? 1 }}
-                onPointerDown={(e) => {
-                  e.preventDefault();
-                  press(key);
-                }}
-              >
-                <span className="key-main">{isLetter && shift ? key.label.toUpperCase() : key.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function FullKeyboard({ nextChar, shift, boxRef, onAction }: Props) {
+function Keyboard({ nextChar, shift, boxRef, onAction }: Props) {
   const hint = keyFor(nextChar);
 
   const press = (key: KeyDef) => {
@@ -223,7 +106,7 @@ function FullKeyboard({ nextChar, shift, boxRef, onAction }: Props) {
     const isLetter = /[a-z]/.test(key.label);
     const upper = shift;
     const char = upper ? (isLetter ? key.label.toUpperCase() : (key.shifted ?? key.label)) : key.label;
-    onAction({ type: "char", char, id: key.id });
+    onAction({ type: "char", char });
   };
 
   return (
