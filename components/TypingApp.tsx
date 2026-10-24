@@ -35,10 +35,22 @@ async function toggleFullscreen() {
   }
 }
 
+/** Fullscreen and turn sideways; iOS Safari and desktop can't lock, so the user rotates by hand. */
+async function goLandscape() {
+  try {
+    if (!document.fullscreenElement) await document.documentElement.requestFullscreen({ navigationUI: "hide" });
+    const orientation = screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> };
+    await orientation.lock?.("landscape");
+  } catch {
+    // can't lock here — the prompt stays until the phone is turned or dismissed
+  }
+}
+
 export default function TypingApp() {
   const [run, setRun] = useState<Run>(() => ({ kind: "lesson", index: 0, text: makeText(ALL_LESSONS[0], 1), round: 0 }));
   const [result, setResult] = useState<SessionResult | null>(null);
   const [menu, setMenu] = useState(false);
+  const [rotateDismissed, setRotateDismissed] = useState(false);
   const muted = useSyncExternalStore(subscribeSound, isMuted, isMutedOnServer);
   const kbdPref = useSyncExternalStore(subscribeSound, getKbdPref, getKbdPrefOnServer);
   const wordCount = useSyncExternalStore(subscribeSound, getWordCount, getWordCountOnServer);
@@ -86,6 +98,24 @@ export default function TypingApp() {
 
   return (
     <div className={`app kbd-${kbdPref}`}>
+      {!rotateDismissed && (
+        <div className="rotate-overlay">
+          <div className="rotate-phone" aria-hidden />
+          <h2>Rotate your phone</h2>
+          <p>TypeFast works best in landscape.</p>
+          <p className="kbd-tip">
+            ⌨ For real typing practice, please connect a keyboard with an <b>OTG cable</b> or <b>Bluetooth</b>. The on-screen
+            keyboard works too.
+          </p>
+          <button className="btn primary" onClick={goLandscape}>
+            Go landscape
+          </button>
+          <button className="btn ghost" onClick={() => setRotateDismissed(true)}>
+            Continue in portrait
+          </button>
+        </div>
+      )}
+
       {/* Drop focus after a toolbar click so typed keys never re-press a button. */}
       <header className="toolbar" onClick={() => (document.activeElement as HTMLElement | null)?.blur()}>
         <button className="menu-btn" onClick={() => setMenu(true)}>

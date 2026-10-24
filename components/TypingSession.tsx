@@ -28,7 +28,7 @@ type State = {
 };
 
 type Action =
-  | { type: "type"; char: string; at: number; text: string; code: boolean; strict: boolean }
+  | { type: "type"; char: string; at: number; text: string; code: boolean; exact: boolean }
   | { type: "tab"; text: string }
   | { type: "back"; word: boolean }
   | { type: "timeup"; at: number };
@@ -54,12 +54,8 @@ function reducer(state: State, action: Action): State {
     const cut = action.word ? state.typed.replace(/\S*\s?$/, "") : state.typed.slice(0, -1);
     return { ...state, typed: cut, auto: state.auto.filter((i) => i < cut.length) };
   }
-  const { char, at, text, code, strict } = action;
+  const { char, at, text, code, exact } = action;
   if (state.typed.length >= text.length) return state;
-  // Strict (car race): a wrong key is counted as a mistake but doesn't move you on.
-  if (strict && char !== text[state.typed.length]) {
-    return { ...state, keystrokes: state.keystrokes + 1, mistakes: state.mistakes + 1, startedAt: state.startedAt ?? at };
-  }
   let typed = state.typed + char;
   const auto = [...state.auto];
   // In code, the next line's indentation is typed for you after a correct Enter.
@@ -75,7 +71,8 @@ function reducer(state: State, action: Action): State {
     keystrokes: state.keystrokes + 1,
     mistakes: state.mistakes + (char === text[state.typed.length] ? 0 : 1),
     startedAt: state.startedAt ?? at,
-    finishedAt: typed.length >= text.length ? at : null,
+    // Exact (car race): the end only counts once every letter is right — fix mistakes with Backspace.
+    finishedAt: (exact ? typed === text : typed.length >= text.length) ? at : null,
   };
 }
 
@@ -116,13 +113,16 @@ type Props = {
   /** Seconds; the session ends when time runs out (timed test). */
   timeLimit?: number;
   onFinish: (result: SessionResult) => void;
-  /** Called with the number of correct letters whenever the typed text changes (car race). */
+  /**
+   * Called with how many letters are right from the start, up to the first mistake, whenever
+   * the typed text changes (car race: the car waits at a mistake until it's fixed).
+   */
   onProgress?: (correct: number) => void;
-  /** Only the right key moves you on (car race): the car never moves on a mistake. */
-  strict?: boolean;
+  /** Finish only when the whole text is typed correctly (car race). */
+  exact?: boolean;
 };
 
-export default function TypingSession({ text, hint, code = false, para = false, timeLimit, onFinish, onProgress, strict = false }: Props) {
+export default function TypingSession({ text, hint, code = false, para = false, timeLimit, onFinish, onProgress, exact = false }: Props) {
   const [state, dispatch] = useReducer(reducer, INITIAL);
   const [shift, setShift] = useState(false);
 
@@ -137,7 +137,7 @@ export default function TypingSession({ text, hint, code = false, para = false, 
 
   // Key flashes go straight to the DOM (a data attribute React doesn't touch), so the
   // keyboard isn't re-rendered twice more for every letter.
-  const flash = useCallback((el: HTMLElement | null | undefined, kind: "active" | "wrong" | "miss", ms: number) => {
+  const flash = useCallback((el: HTMLElement | null | undefined, kind: "active" | "wrong", ms: number) => {
     if (!el) return;
     el.dataset.flash = kind;
     window.setTimeout(() => el.dataset.flash === kind && delete el.dataset.flash, ms);
@@ -153,16 +153,15 @@ export default function TypingSession({ text, hint, code = false, para = false, 
       if (pos >= text.length) return;
       if (char !== text[pos]) {
         flashKey(keyFor(char)?.id ?? keyId, "wrong", 220);
-        if (strict) flash(caretRef.current, "miss", 260);
         navigator.vibrate?.(30);
         playError();
       } else {
         flashKey(keyId, "active", 110);
         playKey();
       }
-      dispatch({ type: "type", char, at: performance.now(), text, code, strict });
+      dispatch({ type: "type", char, at: performance.now(), text, code, exact });
     },
-    [flash, flashKey, pos, text, code, strict],
+    [flashKey, pos, text, code, exact],
   );
 
   const backspace = useCallback(
@@ -228,7 +227,7 @@ export default function TypingSession({ text, hint, code = false, para = false, 
     onFinish(measure(state, 0, text));
   }, [finished, state, text, onFinish]);
 
-  // Correct letters so far, for the race track.
+  // Right letters from the start (up to the first mistake), for the race track.
   const progressRef = useRef(onProgress);
   useEffect(() => {
     progressRef.current = onProgress;
@@ -237,7 +236,7 @@ export default function TypingSession({ text, hint, code = false, para = false, 
   useEffect(() => {
     if (!progressRef.current) return;
     let correct = 0;
-    for (let i = 0; i < typed.length; i++) if (typed[i] === text[i]) correct++;
+    while (correct < typed.length && typed[correct] === text[correct]) correct++;
     progressRef.current(correct);
   }, [typed, text]);
 
@@ -262,8 +261,9 @@ export default function TypingSession({ text, hint, code = false, para = false, 
     const onKey = (e: KeyboardEvent) => {
       const { backspace, typeChar, text } = handlers.current;
       if (e.metaKey) return;
-      // Phone soft keyboards send "Unidentified"; a named key means a real keyboard.
-      if (e.key !== "Unidentified" && !e.repeat) noteHardwareKey();
+      // A typing key means a real keyboard is in use. Phone soft keyboards send "Unidentified",
+      // and the phone's own buttons (volume, back) aren't typing keys, so neither counts.
+      if (!e.repeat && (e.key.length === 1 || e.key === "Backspace" || e.key === "Enter" || e.key === "Tab")) noteHardwareKey();
       if (e.target instanceof HTMLElement && e.target.closest("input, textarea")) return;
       if (e.key === "Backspace") {
         e.preventDefault();

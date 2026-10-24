@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import TypingSession, { SessionResult } from "./TypingSession";
+import TypingSession, { SessionResult, fmtTime } from "./TypingSession";
 import { KeyboardIcon, SoundIcon } from "./TypingApp";
 import { MAX_PLAYERS, Player, RACE_WORDS, Race, RaceView, cleanName, newCode, raceLink } from "@/lib/race";
 import { speedBand } from "@/lib/progress";
@@ -106,7 +106,7 @@ export default function RaceApp() {
       ) : view.status === "error" ? (
         <div className="race-panel">
           <div className="race-card">
-            <h2>Race stopped</h2>
+            <h2>Race link closed</h2>
             <p className="muted">{view.error}</p>
             <div className="race-actions">
               <button className="btn primary" onClick={leave}>
@@ -116,7 +116,7 @@ export default function RaceApp() {
           </div>
         </div>
       ) : (
-        race && <RaceRoom key={view.code} view={view} race={race} />
+        race && <RaceRoom key={view.code} view={view} race={race} onNewRace={() => begin(true)} onLeave={leave} />
       )}
     </div>
   );
@@ -154,8 +154,8 @@ function Setup({
         <h2>{joining ? "You're invited to a typing race!" : "Typing car race"}</h2>
         <p className="muted">
           {joining
-            ? "Type the paragraph fast and correctly — your car moves with every right letter."
-            : `Make a race link, send it to friends (up to ${MAX_PLAYERS} players) and race on the same paragraph.`}
+            ? "Type the paragraph fast and correctly — your car moves with every right letter and stops at a mistake until you fix it."
+            : `Make a race link, send it to friends (up to ${MAX_PLAYERS} players) and race on the same paragraph. One link is for one race.`}
         </p>
         <label className="name-field">
           <span>Your name</span>
@@ -182,8 +182,8 @@ function Setup({
   );
 }
 
-function RaceRoom({ view, race }: { view: RaceView; race: Race }) {
-  const { room, myId, isHost, goAt, status } = view;
+function RaceRoom({ view, race, onNewRace, onLeave }: { view: RaceView; race: Race; onNewRace: () => void; onLeave: () => void }) {
+  const { room, myId, isHost, goAt, closesAt, status } = view;
   const me = room.players.find((p) => p.id === myId);
   const [words, setWords] = useState(RACE_WORDS[1]);
   const [customWords, setCustomWords] = useState("");
@@ -194,7 +194,7 @@ function RaceRoom({ view, race }: { view: RaceView; race: Race }) {
 
   const racing = room.round > 0 && goRound === room.round && (room.phase === "countdown" || room.phase === "race");
   const myRound = mine.round === room.round ? mine : { round: room.round, correct: 0, done: false };
-  const canType = racing && me && !me.waiting && !myRound.done;
+  const canType = racing && me && !myRound.done;
 
   const onProgress = useCallback(
     (correct: number) => {
@@ -235,15 +235,27 @@ function RaceRoom({ view, race }: { view: RaceView; race: Race }) {
       ) : room.phase === "lobby" || room.phase === "done" ? (
         <div className="race-panel">
           <div className="race-card wide">
-            {room.phase === "done" && <Results players={room.players} />}
-            {isHost ? (
+            {room.phase === "done" ? (
               <>
-                {room.phase === "lobby" && (
-                  <>
-                    <h2>Share this link with friends</h2>
-                    <ShareLink link={shareLink} />
-                  </>
-                )}
+                <Results players={room.players} />
+                <p className="muted wait">This race is over, so its link is closed. Make a new link to race again.</p>
+                <div className="race-actions">
+                  {isHost ? (
+                    <button className="btn primary" onClick={onNewRace}>
+                      New race link 🔗
+                    </button>
+                  ) : (
+                    <button className="btn primary" onClick={onLeave}>
+                      Make my own race
+                    </button>
+                  )}
+                </div>
+              </>
+            ) : isHost ? (
+              <>
+                <h2>Share this link with friends</h2>
+                <ShareLink link={shareLink} />
+                {closesAt !== null && <ClosesIn at={closesAt} />}
                 <div className="race-setup">
                   <span className="muted">Paragraph</span>
                   {RACE_WORDS.map((n) => (
@@ -275,30 +287,26 @@ function RaceRoom({ view, race }: { view: RaceView; race: Race }) {
                   />
                 </div>
                 <div className="race-actions">
-                  {room.phase === "done" && <ShareLink link={shareLink} compact />}
                   <button className="btn primary" onClick={() => race.start(words)}>
-                    {room.phase === "done" ? "Race again ↻" : room.players.length > 1 ? "Start race 🏁" : "Start alone 🏁"}
+                    {room.players.length > 1 ? "Start race 🏁" : "Start alone 🏁"}
                   </button>
                 </div>
               </>
             ) : (
-              <p className="muted wait">
-                {room.phase === "done" ? "Waiting for the host to start the next race…" : "You're in! Waiting for the host to start the race…"}
-              </p>
+              <>
+                <p className="muted wait">You&apos;re in! Waiting for the host to start the race…</p>
+                {closesAt !== null && <ClosesIn at={closesAt} />}
+              </>
             )}
           </div>
         </div>
       ) : (
         <div className="race-typing">
-          {goRound !== room.round && goAt !== null && !me?.waiting && (
+          {goRound !== room.round && goAt !== null && (
             <Countdown key={room.round} goAt={goAt} onGo={() => setGoRound(room.round)} />
           )}
-          {me?.waiting ? (
-            <div className="race-panel">
-              <p className="muted wait">A race is on. You&apos;ll join from the next round — watch the cars!</p>
-            </div>
-          ) : canType ? (
-            <TypingSession key={room.round} text={room.text} para strict onFinish={onFinish} onProgress={onProgress} />
+          {canType ? (
+            <TypingSession key={room.round} text={room.text} para exact onFinish={onFinish} onProgress={onProgress} />
           ) : myRound.done ? (
             <div className="race-panel">
               <div className="race-card">
@@ -359,7 +367,7 @@ function Track({
             </div>
             <span className="lane-stat">
               {p.place ? <b className="place">{PLACES[p.place - 1]}</b> : null}
-              <span className={`lane-wpm ${phase === "lobby" ? "" : speedBand(p.wpm)}`}>{phase === "lobby" ? (p.waiting ? "next round" : "ready") : `${p.wpm} wpm`}</span>
+              <span className={`lane-wpm ${phase === "lobby" ? "" : speedBand(p.wpm)}`}>{phase === "lobby" ? "ready" : `${p.wpm} wpm`}</span>
             </span>
           </div>
         );
@@ -397,10 +405,23 @@ function Countdown({ goAt, onGo }: { goAt: number; onGo: () => void }) {
   );
 }
 
+/** The unstarted link's time left, so nobody is surprised when it closes. */
+function ClosesIn({ at }: { at: number }) {
+  const [now, setNow] = useState(() => performance.now());
+  useEffect(() => {
+    const t = window.setInterval(() => setNow(performance.now()), 1000);
+    return () => window.clearInterval(t);
+  }, []);
+  const left = Math.max(0, Math.ceil((at - now) / 1000));
+  return (
+    <p className={`closes-in ${left <= 60 ? "soon" : ""}`}>
+      Link closes in <b>{fmtTime(left)}</b> if the race isn&apos;t started
+    </p>
+  );
+}
+
 function Results({ players }: { players: Player[] }) {
-  const order = [...players]
-    .filter((p) => !p.waiting)
-    .sort((a, b) => (a.place ?? 99) - (b.place ?? 99) || b.correct - a.correct);
+  const order = [...players].sort((a, b) => (a.place ?? 99) - (b.place ?? 99) || b.correct - a.correct);
   return (
     <div className="results">
       <h2>Race results</h2>
@@ -420,7 +441,7 @@ function Results({ players }: { players: Player[] }) {
   );
 }
 
-function ShareLink({ link, compact = false }: { link: string; compact?: boolean }) {
+function ShareLink({ link }: { link: string }) {
   const [copied, setCopied] = useState(false);
   const copy = async () => {
     try {
@@ -433,12 +454,6 @@ function ShareLink({ link, compact = false }: { link: string; compact?: boolean 
     window.setTimeout(() => setCopied(false), 1600);
   };
   const share = () => navigator.share?.({ title: "TypeFast car race", text: "Race me in a typing race!", url: link }).catch(() => {});
-  if (compact)
-    return (
-      <button className="btn" onClick={copy}>
-        {copied ? "Copied ✓" : "Copy link"}
-      </button>
-    );
   return (
     <div className="share">
       <input readOnly value={link} onFocus={(e) => e.target.select()} aria-label="Race link" />

@@ -1,11 +1,12 @@
 // Car race rooms over WebRTC (PeerJS). The player who makes the link is the host:
 // their browser keeps the room and passes everyone's position to the others.
 // PeerJS's free public server only introduces the browsers — no account or key needed.
+// One link is one race: once the race is over (or nobody starts it in time) the link closes.
 
 import type { DataConnection, Peer as PeerType } from "peerjs";
 import { ALL_LESSONS, makeText } from "./lessons";
 
-export type Phase = "lobby" | "countdown" | "race" | "done";
+export type Phase = "lobby" | "countdown" | "race" | "done" | "expired";
 
 export type Player = {
   id: string;
@@ -17,8 +18,6 @@ export type Player = {
   acc: number;
   /** 1st, 2nd… once finished. */
   place: number | null;
-  /** Joined mid-race: watches until the next round. */
-  waiting: boolean;
 };
 
 export type RoomState = { phase: Phase; round: number; text: string; players: Player[] };
@@ -32,13 +31,26 @@ export type RaceView = {
   room: RoomState;
   /** performance.now() when the cars go (local clock). */
   goAt: number | null;
+  /** performance.now() when an unstarted lobby times out (local clock). */
+  closesAt: number | null;
 };
 
 type ToHost = { t: "join"; name: string } | { t: "progress"; correct: number; wpm: number; acc: number };
-type ToGuest = { t: "welcome"; id: string } | { t: "state"; room: RoomState; startsIn: number | null };
+type ToGuest =
+  | { t: "welcome"; id: string }
+  | { t: "full" }
+  | { t: "started" }
+  | { t: "state"; room: RoomState; startsIn: number | null; closesIn: number | null };
 
 const PREFIX = "typefast-race-";
 const COUNTDOWN_MS = 3500;
+/** An unstarted race link closes after this long. */
+export const LOBBY_MS = 10 * 60_000;
+/** The race ends by itself when nobody has typed for this long. */
+const IDLE_MS = 60_000;
+/** The host repeats the room this often, so guests notice when the host is gone. */
+const HEARTBEAT_MS = 4000;
+const HOST_LOST_MS = 15_000;
 export const MAX_PLAYERS = 8;
 export const RACE_WORDS = [15, 30, 50];
 const RACE_LESSON = ALL_LESSONS.find((l) => l.id === "a1")!;
@@ -55,13 +67,17 @@ export function raceLink(code: string) {
 const EMPTY_ROOM: RoomState = { phase: "lobby", round: 0, text: "", players: [] };
 
 const ERRORS: Record<string, string> = {
-  "peer-unavailable": "This race link has ended or the host left. Ask for a new link.",
+  "peer-unavailable": "This race link has expired — the race is over or the host left. Ask for a new link.",
   network: "Can't reach the race server. Check your internet and try again.",
   "server-error": "The race server is busy. Try again in a moment.",
   "socket-error": "Lost connection to the race server.",
   "socket-closed": "Lost connection to the race server.",
   "browser-incompatible": "This browser can't play races. Try Chrome.",
   "unavailable-id": "That race code is taken. Make a new link.",
+  full: `This race is full (${MAX_PLAYERS} players). Ask for a new link.`,
+  started: "This race has already started, so the link is closed. Ask for a new link.",
+  expired: "Session timed out — the race wasn't started within 10 minutes, so the link closed. Make a new link.",
+  "host-lost": "Lost the host — their page was closed or went to sleep, so the race link closed.",
 };
 
 export class Race {
@@ -70,8 +86,14 @@ export class Race {
   private hostConn: DataConnection | null = null;
   private broadcastTimer: number | null = null;
   private goTimer: number | null = null;
+  private lobbyTimer: number | null = null;
+  private idleTimer: number | null = null;
+  private heartbeat: number | null = null;
+  private hostSeenTimer: number | null = null;
   private hostGoAt: number | null = null;
   private destroyed = false;
+  /** The link is closed (race over, timed out or left) — ignore anything the connection does now. */
+  private closed = false;
   // Closing or reloading the tab says goodbye at once, so the others aren't left waiting.
   private onPageHide = () => this.destroy();
   view: RaceView;
@@ -82,7 +104,7 @@ export class Race {
     private name: string,
     private onChange: (view: RaceView) => void,
   ) {
-    this.view = { status: "connecting", code, myId: isHost ? "host" : "", isHost, room: EMPTY_ROOM, goAt: null };
+    this.view = { status: "connecting", code, myId: isHost ? "host" : "", isHost, room: EMPTY_ROOM, goAt: null, closesAt: null };
     if (isHost) this.view.room = { ...EMPTY_ROOM, players: [this.newPlayer("host", name, 0)] };
     window.addEventListener("pagehide", this.onPageHide);
     void this.open();
@@ -94,7 +116,7 @@ export class Race {
   }
 
   private fail(type: string) {
-    if (this.destroyed) return;
+    if (this.destroyed || this.closed) return;
     this.set({ status: "error", error: ERRORS[type] ?? "Connection problem. Try again." });
   }
 
@@ -106,11 +128,16 @@ export class Race {
     peer.on("error", (e) => this.fail(e.type));
     peer.on("disconnected", () => {
       // The signalling server dropped us; open races keep working, so just reconnect quietly.
-      if (!this.destroyed) peer.reconnect();
+      if (!this.destroyed && !this.closed) peer.reconnect();
     });
 
     if (this.view.isHost) {
-      peer.on("open", () => this.set({ status: "ready" }));
+      peer.on("open", () => {
+        if (this.view.status !== "connecting") return; // a reconnect, not the first open
+        this.set({ status: "ready", closesAt: performance.now() + LOBBY_MS });
+        this.lobbyTimer = window.setTimeout(() => this.expire(), LOBBY_MS);
+        this.heartbeat = window.setInterval(() => this.broadcast(), HEARTBEAT_MS);
+      });
       peer.on("connection", (conn) => this.accept(conn));
       return;
     }
@@ -118,31 +145,61 @@ export class Race {
     peer.on("open", () => {
       const conn = peer.connect(PREFIX + this.view.code, { reliable: true });
       this.hostConn = conn;
-      conn.on("open", () => conn.send({ t: "join", name: this.name } satisfies ToHost));
-      conn.on("data", (data) => this.fromHost(data as ToGuest));
-      conn.on("close", () => !this.destroyed && this.set({ status: "error", error: "The host left the race." }));
-      conn.on("error", () => this.fail("socket-error"));
+      conn.on("open", () => {
+        conn.send({ t: "join", name: this.name } satisfies ToHost);
+        this.hostSeen();
+      });
+      conn.on("data", (data) => {
+        this.hostSeen();
+        this.fromHost(data as ToGuest);
+      });
+      // After the results the host closes the link on purpose — keep showing the results.
+      const lost = () => this.view.room.phase !== "done" && this.fail(this.view.status === "ready" ? "host-lost" : "peer-unavailable");
+      conn.on("close", lost);
+      conn.on("error", lost);
     });
   }
 
   destroy() {
     this.destroyed = true;
     window.removeEventListener("pagehide", this.onPageHide);
-    if (this.broadcastTimer) window.clearTimeout(this.broadcastTimer);
-    if (this.goTimer) window.clearTimeout(this.goTimer);
+    this.closeLink();
+  }
+
+  /** Stop all timers and close the link; what's on screen stays. */
+  private closeLink() {
+    this.closed = true;
+    for (const t of [this.broadcastTimer, this.goTimer, this.lobbyTimer, this.idleTimer, this.hostSeenTimer]) if (t) window.clearTimeout(t);
+    if (this.heartbeat) window.clearInterval(this.heartbeat);
+    this.broadcastTimer = this.goTimer = this.lobbyTimer = this.idleTimer = this.hostSeenTimer = this.heartbeat = null;
     this.peer?.destroy();
   }
 
   // ---------- guest ----------
 
+  /** Any message from the host proves it's still there. */
+  private hostSeen() {
+    if (this.hostSeenTimer) window.clearTimeout(this.hostSeenTimer);
+    this.hostSeenTimer = window.setTimeout(() => {
+      if (this.view.room.phase !== "done") {
+        this.fail("host-lost");
+        this.closeLink();
+      }
+    }, HOST_LOST_MS);
+  }
+
   private fromHost(msg: ToGuest) {
     if (msg.t === "welcome") return this.set({ myId: msg.id, status: "ready" });
-    const prev = this.view.room;
-    let goAt = this.view.goAt;
-    // A new round: the countdown starts from when the message arrived.
-    if (msg.room.round !== prev.round) goAt = null;
-    if (goAt === null && msg.startsIn !== null) goAt = performance.now() + msg.startsIn;
-    this.set({ room: msg.room, goAt });
+    if (msg.t === "full" || msg.t === "started") return this.fail(msg.t);
+    if (msg.room.phase === "expired") {
+      this.fail("expired");
+      return this.closeLink();
+    }
+    // The countdown starts from when the message arrived.
+    const goAt = this.view.goAt ?? (msg.startsIn !== null ? performance.now() + msg.startsIn : null);
+    const closesAt = msg.closesIn !== null ? performance.now() + msg.closesIn : null;
+    this.set({ room: msg.room, goAt, closesAt });
+    if (msg.room.phase === "done") this.closeLink();
   }
 
   /** My position, sent on every change (they are tiny messages). */
@@ -154,7 +211,7 @@ export class Race {
   // ---------- host ----------
 
   private newPlayer(id: string, name: string, color: number): Player {
-    return { id, name, color, correct: 0, wpm: 0, acc: 100, place: null, waiting: false };
+    return { id, name, color, correct: 0, wpm: 0, acc: 100, place: null };
   }
 
   private accept(conn: DataConnection) {
@@ -164,6 +221,8 @@ export class Race {
       else if (msg.t === "progress") this.update(conn.peer, msg.correct, msg.wpm, msg.acc);
     });
     const leave = () => {
+      // Guests close their side once the results arrive — the results keep everyone who raced.
+      if (this.closed || this.view.room.phase === "done") return;
       this.conns.delete(conn.peer);
       this.setRoom({ players: this.view.room.players.filter((p) => p.id !== conn.peer) });
       this.checkDone();
@@ -174,41 +233,65 @@ export class Race {
 
   private join(conn: DataConnection, name: string) {
     const { players, phase } = this.view.room;
-    if (players.length >= MAX_PLAYERS) {
-      conn.close();
+    // The link only lets people in before the race starts.
+    const refuse: ToGuest | null = phase !== "lobby" ? { t: "started" } : players.length >= MAX_PLAYERS ? { t: "full" } : null;
+    if (refuse) {
+      conn.send(refuse);
+      window.setTimeout(() => conn.close(), 500);
       return;
     }
     const used = new Set(players.map((p) => p.color));
     const color = Array.from({ length: MAX_PLAYERS }, (_, i) => i).find((c) => !used.has(c)) ?? 0;
     const player = this.newPlayer(conn.peer, cleanName(name), color);
-    player.waiting = phase === "countdown" || phase === "race";
     this.conns.set(conn.peer, conn);
     conn.send({ t: "welcome", id: conn.peer } satisfies ToGuest);
     this.setRoom({ players: [...players, player] });
   }
 
   start(words: number) {
-    if (!this.view.isHost) return;
+    if (!this.view.isHost || this.view.room.phase !== "lobby") return;
+    if (this.lobbyTimer) window.clearTimeout(this.lobbyTimer);
+    this.lobbyTimer = null;
     const text = makeText(RACE_LESSON, (Math.random() * 2 ** 32) | 0, Math.min(300, Math.max(5, words)));
-    const players = this.view.room.players.map((p) => ({ ...p, correct: 0, wpm: 0, acc: 100, place: null, waiting: false }));
     this.hostGoAt = performance.now() + COUNTDOWN_MS;
     this.view.goAt = this.hostGoAt;
-    this.setRoom({ phase: "countdown", round: this.view.room.round + 1, text, players });
-    if (this.goTimer) window.clearTimeout(this.goTimer);
-    this.goTimer = window.setTimeout(() => this.setRoom({ phase: "race" }), COUNTDOWN_MS);
+    this.view.closesAt = null;
+    this.setRoom({ phase: "countdown", round: 1, text });
+    this.goTimer = window.setTimeout(() => {
+      this.setRoom({ phase: "race" });
+      this.resetIdle();
+    }, COUNTDOWN_MS);
   }
 
   /** Stop waiting for slow or idle players. */
   end() {
-    if (this.view.isHost && this.view.room.phase !== "lobby") this.setRoom({ phase: "done" });
+    if (!this.view.isHost || (this.view.room.phase !== "countdown" && this.view.room.phase !== "race")) return;
+    this.setRoom({ phase: "done" });
+    // Give the results a moment to reach everyone, then close the link for good.
+    if (this.heartbeat) window.clearInterval(this.heartbeat);
+    this.heartbeat = null;
+    window.setTimeout(() => this.closeLink(), 1500);
+  }
+
+  /** Nobody started the race in time: tell everyone and close the link. */
+  private expire() {
+    this.setRoom({ phase: "expired" });
+    this.fail("expired");
+    window.setTimeout(() => this.closeLink(), 1500);
+  }
+
+  private resetIdle() {
+    if (this.idleTimer) window.clearTimeout(this.idleTimer);
+    this.idleTimer = window.setTimeout(() => this.end(), IDLE_MS);
   }
 
   private update(id: string, correct: number, wpm: number, acc: number) {
     const { room } = this.view;
     if (room.phase !== "race") return;
+    this.resetIdle();
     let place = room.players.filter((p) => p.place !== null).length;
     const players = room.players.map((p) => {
-      if (p.id !== id || p.waiting || p.place !== null) return p;
+      if (p.id !== id || p.place !== null) return p;
       const done = correct >= room.text.length;
       return { ...p, correct, wpm, acc, place: done ? ++place : null };
     });
@@ -217,9 +300,8 @@ export class Race {
   }
 
   private checkDone() {
-    const { room } = this.view;
-    const racing = room.players.filter((p) => !p.waiting);
-    if (room.phase === "race" && racing.length > 0 && racing.every((p) => p.place !== null)) this.setRoom({ phase: "done" });
+    const { players, phase } = this.view.room;
+    if (phase === "race" && players.length > 0 && players.every((p) => p.place !== null)) this.end();
   }
 
   private setRoom(patch: Partial<RoomState>) {
@@ -233,8 +315,10 @@ export class Race {
     if (this.broadcastTimer) window.clearTimeout(this.broadcastTimer);
     this.broadcastTimer = null;
     const { room } = this.view;
-    const startsIn = room.phase === "countdown" && this.hostGoAt !== null ? Math.max(0, this.hostGoAt - performance.now()) : null;
-    const msg: ToGuest = { t: "state", room, startsIn };
+    const now = performance.now();
+    const startsIn = room.phase === "countdown" && this.hostGoAt !== null ? Math.max(0, this.hostGoAt - now) : null;
+    const closesIn = room.phase === "lobby" && this.view.closesAt !== null ? Math.max(0, this.view.closesAt - now) : null;
+    const msg: ToGuest = { t: "state", room, startsIn, closesIn };
     for (const conn of this.conns.values()) if (conn.open) conn.send(msg);
   }
 }

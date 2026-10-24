@@ -1,6 +1,7 @@
 # TypeFast
 
-A touch-typing tutor for phones (upright or sideways) and desktop.
+A touch-typing tutor for phones (best sideways, works upright too) and desktop. On a phone held
+upright it first asks you to rotate, or you can continue in portrait.
 
 ## Practice
 
@@ -21,24 +22,34 @@ A touch-typing tutor for phones (upright or sideways) and desktop.
 ## Phone keyboard
 
 An on-screen keyboard shows the next key to press and works when the phone is held upright or
-sideways. If you type on a real keyboard (Bluetooth or laptop), it hides itself; turn it back on
-from the keyboard button.
+sideways. If you type letters on a real keyboard (OTG, Bluetooth or laptop), it hides itself;
+the phone's volume buttons don't count. Turn it back on from the keyboard button.
 
 ## Car Race
 
 Race your friends, up to **8 players**:
 
 1. Open **Car Race** from the menu, enter your name and make a race link.
-2. Share the link. Friends open it, enter a name and join.
+2. Share the link. Friends open it, enter a name and join before the race starts.
 3. The host picks the length (15, 30, 50 words or a custom 5–300) and starts. After a 3-second
    countdown everyone types the same text; each car moves as its player types.
-4. In a race a wrong key doesn't move you forward — type the right one to keep going.
-5. Results show places, speed and accuracy; the host can start the next round.
+4. A wrong letter shows in red like in lessons, and your car stops at it until you fix it with
+   Backspace. You finish only when every letter is right.
+5. Results show places, speed and accuracy.
+
+**One link = one race.** The link closes when:
+
+- the race is over (the results stay on screen; the host can make a new link),
+- nobody starts the race within **10 minutes** (the lobby shows a countdown, then "Session timed out"),
+- the host closes the page or it goes to sleep for about 15 seconds.
+
+During a race, if nobody types for 60 seconds the race ends by itself. Opening a closed link
+says it has expired, and nobody can join a race that has already started.
 
 Races run browser-to-browser over WebRTC ([PeerJS](https://peerjs.com/)); PeerJS's free public
 server only connects the players, so there's no account, key or backend. Notes:
 
-- The host's tab keeps the room — if the host closes it, the race ends.
+- The host's tab keeps the room, so the host should keep it open and on screen.
 - Friends need the deployed site's link; a `localhost` link only works on your own computer.
 - Some strict office or school networks block WebRTC.
 
