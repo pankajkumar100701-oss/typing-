@@ -74,6 +74,9 @@ export const playError = () =>
     tone(150, 0.07, 0.11, "square", 0.04);
   });
 
+/** Race countdown: a short beep for 3, 2, 1 and a higher one for GO. */
+export const playCount = (go: boolean) => play(() => tone(go ? 1046.5 : 523.25, 0, go ? 0.35 : 0.15, "sine", 0.12));
+
 /** Short rising chime when a text is finished. */
 export const playComplete = () =>
   play(() => {

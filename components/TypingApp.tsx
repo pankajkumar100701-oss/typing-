@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useState, useSyncExternalStore } from "react";
 import TypingSession, { SessionResult, fmtTime } from "./TypingSession";
 import { ALL_LESSONS, SECTIONS, makeText, sectionOf, testText } from "@/lib/lessons";
@@ -307,6 +308,16 @@ function Menu({
               </section>
             );
           })}
+          <Link className="race-entry" href="/race">
+            <span className="race-entry-icon" aria-hidden>
+              🏎️
+            </span>
+            <span className="level-text">
+              <b>Car Race</b>
+              <small>Make a link, send it to friends and race them typing</small>
+            </span>
+            <i aria-hidden>→</i>
+          </Link>
           <div className="legend">
             <h4>Speed levels</h4>
             {(["slow", "mid", "fast"] as const).map((band) => (
@@ -413,7 +424,7 @@ function Cell({ label, value, tone }: { label: string; value: string; tone?: "go
   );
 }
 
-function SoundIcon({ muted }: { muted: boolean }) {
+export function SoundIcon({ muted }: { muted: boolean }) {
   return (
     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor" stroke="none" />
@@ -429,7 +440,7 @@ function SoundIcon({ muted }: { muted: boolean }) {
   );
 }
 
-function KeyboardIcon() {
+export function KeyboardIcon() {
   return (
     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
       <rect x="2.5" y="6" width="19" height="12" rx="2" />

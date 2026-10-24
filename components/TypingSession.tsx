@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState } from "react";
 import Keyboard, { KeyAction, keyFor, keyIdForEventKey } from "./Keyboard";
 import { speedBand } from "@/lib/progress";
 import { playBack, playError, playKey } from "@/lib/sound";
@@ -112,11 +112,12 @@ type Props = {
   /** Seconds; the session ends when time runs out (timed test). */
   timeLimit?: number;
   onFinish: (result: SessionResult) => void;
+  /** Called with the number of correct letters whenever the typed text changes (car race). */
+  onProgress?: (correct: number) => void;
 };
 
-export default function TypingSession({ text, hint, code = false, para = false, timeLimit, onFinish }: Props) {
+export default function TypingSession({ text, hint, code = false, para = false, timeLimit, onFinish, onProgress }: Props) {
   const [state, dispatch] = useReducer(reducer, INITIAL);
-  const [now, setNow] = useState(0);
   const [shift, setShift] = useState(false);
   const [pressedId, setPressedId] = useState<string>();
   const [wrongId, setWrongId] = useState<string>();
@@ -157,16 +158,15 @@ export default function TypingSession({ text, hint, code = false, para = false, 
     [flash, pos],
   );
 
-  // Live speed, and the time limit for tests.
+  // The time limit for tests (the live clock itself ticks inside StatusBar).
   const startedAt = state.startedAt;
   useEffect(() => {
-    if (startedAt === null || finished) return;
-    const t = window.setInterval(() => {
-      const at = performance.now();
-      if (timeLimit && at - startedAt >= timeLimit * 1000) dispatch({ type: "timeup", at: startedAt + timeLimit * 1000 });
-      setNow(at);
-    }, 250);
-    return () => window.clearInterval(t);
+    if (startedAt === null || finished || !timeLimit) return;
+    const t = window.setTimeout(
+      () => dispatch({ type: "timeup", at: startedAt + timeLimit * 1000 }),
+      startedAt + timeLimit * 1000 - performance.now(),
+    );
+    return () => window.clearTimeout(t);
   }, [startedAt, finished, timeLimit]);
 
   // Glide the caret to the next letter and slide the line so the caret stays in view.
@@ -179,16 +179,22 @@ export default function TypingSession({ text, hint, code = false, para = false, 
       const atEnd = pos >= text.length;
       const span = line.children[Math.min(pos, text.length - 1)] as HTMLElement | undefined;
       if (!span) return;
+      // Read every size first, then write: mixing reads and writes makes the browser
+      // lay out the whole text again for each read, which is what made typing lag.
       const left = atEnd ? span.offsetLeft + span.offsetWidth : span.offsetLeft;
-      caret.style.transform = `translate(${left}px, ${span.offsetTop}px)`;
-      caret.style.height = `${span.offsetHeight}px`;
+      const top = span.offsetTop;
+      const height = span.offsetHeight;
+      const boxW = box.clientWidth;
+      const boxH = box.clientHeight;
+      caret.style.transform = `translate(${left}px, ${top}px)`;
+      if (caret.style.height !== `${height}px`) caret.style.height = `${height}px`;
       // Lessons slide sideways; code scrolls up line by line.
       // Paragraphs keep the current line second from the top.
       line.style.transform = para
-        ? `translateY(${-Math.max(0, span.offsetTop - span.offsetHeight)}px)`
+        ? `translateY(${-Math.max(0, top - height)}px)`
         : code
-          ? `translate(${-Math.max(0, left - box.clientWidth * 0.75)}px, ${-Math.max(0, span.offsetTop - box.clientHeight * 0.3)}px)`
-          : `translateX(${-Math.max(0, left - box.clientWidth * 0.35)}px)`;
+          ? `translate(${-Math.max(0, left - boxW * 0.75)}px, ${-Math.max(0, top - boxH * 0.3)}px)`
+          : `translateX(${-Math.max(0, left - boxW * 0.35)}px)`;
     };
     place();
     window.addEventListener("resize", place);
@@ -203,20 +209,39 @@ export default function TypingSession({ text, hint, code = false, para = false, 
     onFinish(measure(state, 0, text));
   }, [finished, state, text, onFinish]);
 
-  const handleAction = useCallback(
-    (action: KeyAction) => {
-      if (action.type === "shift") return setShift((s) => !s);
-      if (action.type === "backspace") return backspace(false);
-      if (action.type === "tab") return dispatch({ type: "tab", text });
-      typeChar(action.char, keyFor(action.char)?.id);
-      setShift(false);
-    },
-    [backspace, typeChar, text],
-  );
+  // Correct letters so far, for the race track.
+  const progressRef = useRef(onProgress);
+  useEffect(() => {
+    progressRef.current = onProgress;
+  });
+  const typed = state.typed;
+  useEffect(() => {
+    if (!progressRef.current) return;
+    let correct = 0;
+    for (let i = 0; i < typed.length; i++) if (typed[i] === text[i]) correct++;
+    progressRef.current(correct);
+  }, [typed, text]);
+
+  // The latest handlers live in a ref, so the on-screen keyboard and the key listener
+  // don't have to be rebuilt after every letter.
+  const handlers = useRef({ backspace, typeChar, text });
+  useLayoutEffect(() => {
+    handlers.current = { backspace, typeChar, text };
+  });
+
+  const handleAction = useCallback((action: KeyAction) => {
+    const { backspace, typeChar, text } = handlers.current;
+    if (action.type === "shift") return setShift((s) => !s);
+    if (action.type === "backspace") return backspace(false);
+    if (action.type === "tab") return dispatch({ type: "tab", text });
+    typeChar(action.char, keyFor(action.char)?.id);
+    setShift(false);
+  }, []);
 
   // Physical keyboard.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      const { backspace, typeChar, text } = handlers.current;
       if (e.metaKey) return;
       if (e.target instanceof HTMLElement && e.target.closest("input, textarea")) return;
       if (e.key === "Backspace") {
@@ -234,53 +259,76 @@ export default function TypingSession({ text, hint, code = false, para = false, 
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [backspace, typeChar, text]);
-
-  const live = measure(state, now, text);
-  const band = state.startedAt === null ? "" : speedBand(live.wpm);
+  }, []);
 
   return (
     <div className="session">
       <div ref={boxRef} className={`text-box ${code ? "is-code" : ""} ${para ? "is-para" : ""}`}>
         {hint && !para && <div className="hint">{hint}</div>}
         <div ref={lineRef} className="text-line">
-          {[...text].map((ch, i) => {
-            const cls = i < pos ? (state.typed[i] === ch ? "ok" : "bad") : "todo";
-            return (
-              <span key={i} className={`ch ${cls} ${ch === " " ? "sp" : ""} ${ch === "\n" ? "nl" : ""}`}>
-                {ch === "\n" ? "↵\n" : i < pos && state.typed[i] !== ch && ch === " " ? "·" : ch}
-              </span>
-            );
-          })}
+          <Letters text={text} typed={state.typed} />
           <div ref={caretRef} className={`caret ${state.startedAt === null ? "blink" : ""}`} />
         </div>
       </div>
 
-      <div className="statusbar">
-        <div className="stat">
-          <span className="stat-label">Speed</span>
-          <span className={`stat-value speed ${band}`}>
-            {live.wpm}
-            <small>wpm</small>
-          </span>
-        </div>
-        <div className="stat">
-          <span className="stat-label">Accuracy</span>
-          <span className="stat-value">
-            {live.acc}
-            <small>%</small>
-          </span>
-        </div>
-        <div className="stat">
-          <span className="stat-label">{timeLimit ? "Time left" : "Time"}</span>
-          <span className="stat-value">{fmtTime(timeLimit ? Math.max(0, timeLimit - live.seconds) : live.seconds)}</span>
-        </div>
-        <div className="status-progress" aria-label="Progress">
-          <span style={{ width: `${timeLimit ? Math.min(100, (live.seconds / timeLimit) * 100) : (pos / text.length) * 100}%` }} />
-        </div>
-      </div>
+      <StatusBar state={state} text={text} timeLimit={timeLimit} />
 
       <Keyboard nextChar={finished ? undefined : text[pos]} shift={shift} pressedId={pressedId} wrongId={wrongId} onAction={handleAction} />
+    </div>
+  );
+}
+
+/** One letter; only re-renders when its own colour changes. */
+const Letter = memo(function Letter({ ch, cls }: { ch: string; cls: "ok" | "bad" | "todo" }) {
+  return (
+    <span className={`ch ${cls} ${ch === " " ? "sp" : ""} ${ch === "\n" ? "nl" : ""}`}>
+      {ch === "\n" ? "↵\n" : cls === "bad" && ch === " " ? "·" : ch}
+    </span>
+  );
+});
+
+/** The text as letters: skipped entirely on clock ticks and key flashes. */
+const Letters = memo(function Letters({ text, typed }: { text: string; typed: string }) {
+  return [...text].map((ch, i) => <Letter key={i} ch={ch} cls={i < typed.length ? (typed[i] === ch ? "ok" : "bad") : "todo"} />);
+});
+
+/** Speed, accuracy and time — the only part that re-renders every clock tick. */
+function StatusBar({ state, text, timeLimit }: { state: State; text: string; timeLimit?: number }) {
+  const [now, setNow] = useState(0);
+  const running = state.startedAt !== null && state.finishedAt === null;
+  useEffect(() => {
+    if (!running) return;
+    const t = window.setInterval(() => setNow(performance.now()), 250);
+    return () => window.clearInterval(t);
+  }, [running]);
+
+  const live = measure(state, Math.max(now, state.startedAt ?? 0), text);
+  const band = state.startedAt === null ? "" : speedBand(live.wpm);
+  const pos = state.typed.length;
+
+  return (
+    <div className="statusbar">
+      <div className="stat">
+        <span className="stat-label">Speed</span>
+        <span className={`stat-value speed ${band}`}>
+          {live.wpm}
+          <small>wpm</small>
+        </span>
+      </div>
+      <div className="stat">
+        <span className="stat-label">Accuracy</span>
+        <span className="stat-value">
+          {live.acc}
+          <small>%</small>
+        </span>
+      </div>
+      <div className="stat">
+        <span className="stat-label">{timeLimit ? "Time left" : "Time"}</span>
+        <span className="stat-value">{fmtTime(timeLimit ? Math.max(0, timeLimit - live.seconds) : live.seconds)}</span>
+      </div>
+      <div className="status-progress" aria-label="Progress">
+        <span style={{ width: `${timeLimit ? Math.min(100, (live.seconds / timeLimit) * 100) : (pos / text.length) * 100}%` }} />
+      </div>
     </div>
   );
 }

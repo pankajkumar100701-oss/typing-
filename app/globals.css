@@ -339,11 +339,11 @@ button:disabled {
 .text-line {
   position: relative;
   white-space: pre;
-  transition: transform 0.15s ease-out;
+  transition: transform 0.12s ease-out;
+  will-change: transform;
 }
 .ch {
   color: var(--faint);
-  transition: color 0.1s;
 }
 .ch.ok {
   color: var(--fast);
@@ -362,7 +362,8 @@ button:disabled {
   margin-left: -1px;
   border-radius: 2px;
   background: var(--accent);
-  transition: transform 0.1s ease-out;
+  transition: transform 0.06s linear;
+  will-change: transform;
 }
 .caret.blink {
   animation: blink 1s steps(2) infinite;
@@ -515,11 +516,21 @@ button:disabled {
   color: var(--accent);
   font-weight: 700;
   z-index: 1;
+}
+/* The pulse fades a ring in and out with opacity only, so it doesn't repaint the keyboard every frame. */
+.key.is-next::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 7px;
+  border: 3px solid #ffffffb3;
+  pointer-events: none;
+  opacity: 0;
   animation: pulse 1s ease-in-out infinite;
 }
 @keyframes pulse {
   50% {
-    outline-color: color-mix(in oklab, var(--accent) 45%, transparent);
+    opacity: 1;
   }
 }
 .key.is-active {
@@ -1081,4 +1092,292 @@ button:disabled {
   .result-speed b {
     font-size: 3.2rem;
   }
+}
+
+/* ---------- car race ---------- */
+.race-entry {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--accent);
+  background: linear-gradient(90deg, var(--accent-soft), var(--surface));
+}
+.race-entry-icon {
+  font-size: 1.3rem;
+  line-height: 1;
+}
+.race-entry i {
+  font-style: normal;
+  color: var(--accent);
+  font-weight: 700;
+}
+.race-tag {
+  margin-left: 4px;
+  padding: 2px 8px;
+  border-radius: 99px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+.room-code {
+  padding: 4px 10px;
+  border-radius: 7px;
+  border: 1px dashed var(--line);
+  font-family: var(--font-code);
+  font-size: 0.75rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.race-room {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.race-panel {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  place-items: center;
+  padding: 10px;
+}
+.race-card {
+  width: min(440px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px 20px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: 0 6px 24px #1d26331a;
+}
+.race-card.wide {
+  width: min(620px, 100%);
+}
+.race-card h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+.race-card p {
+  margin: 0;
+}
+.muted {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.wait {
+  text-align: center;
+}
+.race-hero {
+  display: flex;
+  gap: 12px;
+}
+.race-hero .car {
+  width: 64px;
+}
+.name-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+.name-field input,
+.share input {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  font-size: 0.95rem;
+  color: var(--text);
+  background: var(--sky-2);
+}
+.race-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.share {
+  display: flex;
+  gap: 6px;
+}
+.share input {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-code);
+  font-size: 0.8rem;
+}
+.race-setup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.race-setup .chip {
+  min-width: 0;
+}
+
+/* track: one lane per player, the car slides from start to the finish flag */
+.track {
+  flex: none;
+  margin: 8px 10px 0;
+  padding: 4px 8px;
+  border-radius: 12px;
+  background: #3a4556;
+  display: grid;
+  gap: 2px;
+}
+.lane {
+  --lane-h: clamp(22px, 7dvh, 36px);
+  display: grid;
+  grid-template-columns: clamp(60px, 12vw, 110px) 1fr clamp(66px, 11vw, 100px);
+  align-items: center;
+  gap: 8px;
+  height: var(--lane-h);
+  color: #e6ecf3;
+  font-size: 0.75rem;
+}
+.lane-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.lane-name small {
+  font-weight: 400;
+  opacity: 0.7;
+}
+.lane.me .lane-name {
+  color: #ffd56b;
+}
+.road {
+  --car-w: calc(var(--lane-h) * 2.1);
+  --road-w: 100cqw;
+  container-type: inline-size;
+  position: relative;
+  height: 100%;
+  border-bottom: 2px dashed #ffffff40;
+  background:
+    repeating-linear-gradient(45deg, #fff 0 4px, #1d2633 4px 8px) right / 8px 100% no-repeat,
+    #4a5668;
+}
+.car-slot {
+  position: absolute;
+  left: 0;
+  bottom: 1px;
+  width: var(--car-w);
+  transition: transform 0.25s linear;
+  will-change: transform;
+}
+.car {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.lane-stat {
+  display: flex;
+  justify-content: flex-end;
+  align-items: baseline;
+  gap: 6px;
+  white-space: nowrap;
+}
+.lane-wpm {
+  font-family: var(--font-code);
+}
+.lane-wpm.slow {
+  color: #ff9b9e;
+}
+.lane-wpm.mid {
+  color: #ffd56b;
+}
+.lane-wpm.fast {
+  color: #7ee2a2;
+}
+.place {
+  color: #ffd56b;
+}
+.race-typing {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.race-preview {
+  margin: 8px 10px;
+  opacity: 0.55;
+}
+.countdown {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+.countdown span {
+  display: grid;
+  place-items: center;
+  min-width: 2.2em;
+  height: 2.2em;
+  padding: 0 0.3em;
+  border-radius: 99px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: clamp(2.5rem, 12dvh, 5rem);
+  font-weight: 800;
+  box-shadow: 0 8px 30px #1f6feb55;
+  animation: pop 0.3s ease-out;
+}
+.results h2 {
+  margin-bottom: 6px;
+}
+.results ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+}
+.results li {
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--sky-2);
+  font-size: 0.85rem;
+}
+.results li.winner {
+  background: #fff4d1;
+  font-weight: 700;
+}
+.r-place {
+  font-weight: 700;
+  color: var(--accent);
+}
+.r-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.r-name i {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+.r-stat {
+  font-family: var(--font-code);
+  font-size: 0.78rem;
+  color: var(--muted);
 }
