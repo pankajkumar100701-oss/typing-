@@ -21,9 +21,10 @@ upright it first asks you to rotate, or you can continue in portrait.
 
 ## Phone keyboard
 
-An on-screen keyboard shows the next key to press and works when the phone is held upright or
-sideways. If you type letters on a real keyboard (OTG, Bluetooth or laptop), it hides itself;
-the phone's volume buttons don't count. Turn it back on from the keyboard button.
+- **Phone held upright:** you type with your phone's own keyboard. Tap the text to open it.
+- **Sideways or desktop:** the on-screen keyboard shows the next key to press. If you type
+  letters on a real keyboard (OTG, Bluetooth or laptop), it hides itself; the phone's volume
+  buttons don't count. Turn it back on from the keyboard button. While Shift is on, it turns blue.
 
 ## Car Race
 

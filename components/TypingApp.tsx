@@ -104,8 +104,8 @@ export default function TypingApp() {
           <h2>Rotate your phone</h2>
           <p>TypeFast works best in landscape.</p>
           <p className="kbd-tip">
-            ⌨ For real typing practice, please connect a keyboard with an <b>OTG cable</b> or <b>Bluetooth</b>. The on-screen
-            keyboard works too.
+            ⌨ For real typing practice, please connect a keyboard with an <b>OTG cable</b> or <b>Bluetooth</b>. Held upright,
+            your phone&apos;s own keyboard works too.
           </p>
           <button className="btn primary" onClick={goLandscape}>
             Go landscape

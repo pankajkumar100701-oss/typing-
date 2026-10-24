@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState, useSyncExternalStore } from "react";
 import Keyboard, { KeyAction, keyFor, keyIdForEventKey } from "./Keyboard";
 import { speedBand } from "@/lib/progress";
 import { noteHardwareKey, playBack, playError, playKey, primeAudio } from "@/lib/sound";
@@ -99,6 +99,14 @@ export function measure(state: State, now: number, text: string): SessionResult 
   };
 }
 
+// Phone held upright: type with the phone's own keyboard instead of the on-screen one.
+const NATIVE_KBD = "(orientation: portrait) and (max-width: 820px) and (pointer: coarse)";
+const subscribeNative = (cb: () => void) => {
+  const mq = window.matchMedia(NATIVE_KBD);
+  mq.addEventListener("change", cb);
+  return () => mq.removeEventListener("change", cb);
+};
+
 export function fmtTime(s: number) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
@@ -134,6 +142,7 @@ export default function TypingSession({ text, hint, code = false, para = false, 
   const pos = state.typed.length;
 
   useEffect(primeAudio, []);
+  const nativeKbd = useSyncExternalStore(subscribeNative, () => window.matchMedia(NATIVE_KBD).matches, () => false);
 
   // Key flashes go straight to the DOM (a data attribute React doesn't touch), so the
   // keyboard isn't re-rendered twice more for every letter.
@@ -261,10 +270,11 @@ export default function TypingSession({ text, hint, code = false, para = false, 
     const onKey = (e: KeyboardEvent) => {
       const { backspace, typeChar, text } = handlers.current;
       if (e.metaKey) return;
-      // A typing key means a real keyboard is in use. Phone soft keyboards send "Unidentified",
-      // and the phone's own buttons (volume, back) aren't typing keys, so neither counts.
-      if (!e.repeat && (e.key.length === 1 || e.key === "Backspace" || e.key === "Enter" || e.key === "Tab")) noteHardwareKey();
+      // Text fields (incl. the phone-keyboard field) type for themselves — and the phone's
+      // keyboard sends some named keys like Backspace, which mustn't hide the on-screen one.
       if (e.target instanceof HTMLElement && e.target.closest("input, textarea")) return;
+      // A typing key means a real keyboard is in use; the phone's own buttons (volume, back) don't count.
+      if (!e.repeat && (e.key.length === 1 || e.key === "Backspace" || e.key === "Enter" || e.key === "Tab")) noteHardwareKey();
       if (e.key === "Backspace") {
         e.preventDefault();
         return backspace(e.ctrlKey || e.altKey);
@@ -286,6 +296,7 @@ export default function TypingSession({ text, hint, code = false, para = false, 
     <div className="session">
       <div ref={boxRef} className={`text-box ${code ? "is-code" : ""} ${para ? "is-para" : ""}`}>
         {hint && !para && <div className="hint">{hint}</div>}
+        {nativeKbd && !finished && <NativeInput handlers={handlers} />}
         <div ref={lineRef} className="text-line">
           <Letters text={text} typed={state.typed} />
           <div ref={caretRef} className={`caret ${state.startedAt === null ? "blink" : ""}`} />
@@ -296,6 +307,76 @@ export default function TypingSession({ text, hint, code = false, para = false, 
 
       <Keyboard nextChar={finished ? undefined : text[pos]} shift={shift} boxRef={kbdRef} onAction={handleAction} />
     </div>
+  );
+}
+
+/** Kept in the box so the phone's keyboard always has something to delete. */
+const SENTINEL = " ";
+
+/**
+ * An invisible text field over the text: tapping the text opens the phone's own keyboard.
+ * Phone keyboards don't send normal key events, so what changed in the field is read
+ * instead — added letters are typed, removed ones are Backspace.
+ */
+function NativeInput({ handlers }: { handlers: React.RefObject<{ backspace: (word: boolean) => void; typeChar: (char: string) => void }> }) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  const prev = useRef(SENTINEL);
+  const composing = useRef(false);
+  const [focused, setFocused] = useState(false);
+
+  const reset = () => {
+    if (ref.current) ref.current.value = SENTINEL;
+    prev.current = SENTINEL;
+  };
+
+  const onInput = () => {
+    const el = ref.current;
+    if (!el) return;
+    const now = el.value;
+    const was = prev.current;
+    // Only the changed middle counts, wherever the cursor was.
+    let start = 0;
+    while (start < was.length && start < now.length && was[start] === now[start]) start++;
+    let end = 0;
+    while (end < was.length - start && end < now.length - start && was.at(-1 - end) === now.at(-1 - end)) end++;
+    for (let i = start; i < was.length - end; i++) handlers.current.backspace(false);
+    for (const ch of now.slice(start, now.length - end)) handlers.current.typeChar(ch);
+    prev.current = now;
+    // While the keyboard is still building a word, leave its text alone.
+    if (!composing.current) reset();
+  };
+
+  return (
+    <>
+      <textarea
+        ref={ref}
+        className="native-input"
+        defaultValue={SENTINEL}
+        aria-label="Type here"
+        autoComplete="off"
+        autoCorrect="off"
+        autoCapitalize="off"
+        spellCheck={false}
+        onInput={onInput}
+        onCompositionStart={() => (composing.current = true)}
+        onCompositionEnd={() => {
+          composing.current = false;
+          onInput();
+        }}
+        onFocus={() => setFocused(true)}
+        // Keep the cursor at the end, so Backspace always deletes.
+        onSelect={(e) => {
+          const el = e.currentTarget;
+          if (!composing.current && el.selectionStart !== el.value.length) el.setSelectionRange(el.value.length, el.value.length);
+        }}
+        onBlur={() => {
+          setFocused(false);
+          composing.current = false;
+          reset();
+        }}
+      />
+      {!focused && <div className="native-hint">Tap the text to open your keyboard</div>}
+    </>
   );
 }
 
