@@ -23,8 +23,7 @@ upright it first asks you to rotate, or you can continue in portrait.
 
 An on-screen keyboard shows the next key to press. Held upright, the phone gets a phone-style
 keyboard (letters, with ?123 for numbers and symbols) in the same colours; sideways or on a
-desktop it shows the full keyboard. It works held upright or
-sideways. If you type letters on a real keyboard (OTG, Bluetooth or laptop), it hides itself;
+desktop it shows the full keyboard. If you type letters on a real keyboard (OTG, Bluetooth or laptop), it hides itself;
 the phone's volume buttons don't count. Turn it back on from the keyboard button.
 
 ## Car Race
