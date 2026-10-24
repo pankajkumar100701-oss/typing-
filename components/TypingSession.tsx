@@ -152,7 +152,7 @@ export default function TypingSession({ text, hint, code = false, para = false, 
     (char: string, keyId?: string) => {
       if (pos >= text.length) return;
       if (char !== text[pos]) {
-        flashKey(keyFor(char)?.id ?? keyId, "wrong", 220);
+        flashKey(keyId ?? keyFor(char)?.id, "wrong", 220);
         navigator.vibrate?.(30);
         playError();
       } else {
@@ -252,7 +252,7 @@ export default function TypingSession({ text, hint, code = false, para = false, 
     if (action.type === "shift") return setShift((s) => !s);
     if (action.type === "backspace") return backspace(false);
     if (action.type === "tab") return dispatch({ type: "tab", text });
-    typeChar(action.char, keyFor(action.char)?.id);
+    typeChar(action.char, action.id ?? keyFor(action.char)?.id);
     setShift(false);
   }, []);
 
