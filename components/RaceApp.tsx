@@ -668,6 +668,7 @@ function RaceRoom({ view, race, chat, onGarage }: { view: RaceView; race: Race; 
           <div className="race-panel">
             <div className="race-card wide">
               {room.phase === "done" && <Results players={room.players} />}
+              {room.phase === "done" && me?.place && <Cheer wpm={me.wpm} />}
               {!solo && <RoomSettings room={room} />}
               {isHost ? (
                 <>
@@ -722,6 +723,7 @@ function RaceRoom({ view, race, chat, onGarage }: { view: RaceView; race: Race; 
             <div className="race-panel">
               <div className="race-card">
                 <h2>{me.place ? `You finished ${PLACES[me.place - 1]}!` : me.messy ? "Finished — with too many mistakes" : "Finished!"}</h2>
+                <Cheer wpm={me.wpm} />
                 <p className="muted">
                   {me.wpm} wpm · {me.acc}% accuracy
                   {doneAt && goAt ? ` · ${((doneAt - goAt) / 1000).toFixed(1)}s` : ""}
