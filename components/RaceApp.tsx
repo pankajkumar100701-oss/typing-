@@ -1,13 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useEffectEvent, useRef, useState, useSyncExternalStore } from "react";
 import TypingSession, { SessionResult } from "./TypingSession";
 import Car from "./Car";
 import Chat from "./Chat";
 import { FullscreenButton, KeyboardIcon, LaunchPrompt, UnlockToast } from "./Shell";
 import { CLEAN_SHARE, MAX_PLAYERS, Player, RACE_WORDS, Race, RaceView, cleanName, raceLink } from "@/lib/race";
-import { CAR_MODELS, CarLook, PAINTS, TIERS, bestSpeed, getCar, getCarOnServer, isUnlocked, modelOf, paintCar, saveCar, subscribeCar } from "@/lib/cars";
+import { CAR_MODELS, CarLook, PAINTS, TIERS, bestSpeed, getCar, getCarOnServer, hasSavedCar, isUnlocked, modelOf, paintCar, saveCar, subscribeCar } from "@/lib/cars";
 import ColourRing from "./ColourRing";
 import { CODE_LEN, cleanCode, isCode, newCode } from "@/lib/secure";
 import { saveResult, speedBand, subscribe as subscribeProgress } from "@/lib/progress";
@@ -53,16 +53,33 @@ export default function RaceApp() {
   const storedName = useSyncExternalStore(noSubscribe, savedName, () => "");
   const car = useSyncExternalStore(subscribeCar, getCar, getCarOnServer);
   const wide = useSyncExternalStore(wideSubscribe, isWide, () => false);
-  const [step, setStep] = useState<Step>("car");
+  const returning = useSyncExternalStore(noSubscribe, hasSavedCar, () => false);
+  // No step chosen yet: a first visit opens the garage, a returning player the start screen.
+  const [chosenStep, setStep] = useState<Step | null>(null);
+  const step = chosenStep ?? (returning ? "start" : "car");
   const [name, setName] = useState<string | null>(null);
   const [view, setView] = useState<RaceView | null>(null);
   const [race, setRace] = useState<Race | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
   const [seenChat, setSeenChat] = useState(0);
   const [asking, setAsking] = useState(false);
+  const [garageOpen, setGarageOpen] = useState(false);
   const raceRef = useRef<Race | null>(null);
 
-  useEffect(() => () => raceRef.current?.destroy(), []);
+  // Leaving the page keeps it mounted but hidden; end any room and start fresh on the way back.
+  useEffect(
+    () => () => {
+      raceRef.current?.destroy();
+      raceRef.current = null;
+      setRace(null);
+      setView(null);
+      setStep(null);
+      setChatOpen(false);
+      setGarageOpen(false);
+      setAsking(false);
+    },
+    [],
+  );
   useEffect(primeAudio, []);
 
   const begin = (code: string, host: boolean, solo = false) => {
@@ -73,7 +90,10 @@ export default function RaceApp() {
       // storage blocked — the name just isn't remembered
     }
     raceRef.current?.destroy();
-    if (!solo) history.replaceState(null, "", `/race#${code}`);
+    // The room gets its own history entry, so the phone's back button asks before leaving it.
+    const url = solo ? "/race" : `/race#${code}`;
+    if (history.state?.room) history.replaceState({ room: true }, "", url);
+    else history.pushState({ room: true }, "", url);
     raceRef.current = new Race(code, host, clean, car, setView, solo);
     setRace(raceRef.current);
     setView(raceRef.current.view);
@@ -91,22 +111,32 @@ export default function RaceApp() {
     history.replaceState(null, "", "/race");
   };
 
-  // The chat sheet gets its own history entry, so the phone's back button closes the chat
-  // instead of leaving the game.
+  // Steps, the chat and the garage each get a history entry, so the phone's back button
+  // steps back through them instead of leaving the game.
+  const go = (next: Step) => {
+    history.pushState({ step: next }, "", location.href);
+    setStep(next);
+  };
+  const back = () => {
+    if (history.state?.step) history.back();
+    else setStep("start");
+  };
   const openChat = () => {
-    history.pushState({ chat: true }, "", location.href);
+    history.pushState({ room: true, chat: true }, "", location.href);
     setChatOpen(true);
   };
   const closeChat = () => {
     if (history.state?.chat) history.back();
     else setChatOpen(false);
   };
-  useEffect(() => {
-    if (!chatOpen) return;
-    const onBack = () => setChatOpen(false);
-    window.addEventListener("popstate", onBack);
-    return () => window.removeEventListener("popstate", onBack);
-  }, [chatOpen]);
+  const openGarage = () => {
+    history.pushState({ room: true, garage: true }, "", location.href);
+    setGarageOpen(true);
+  };
+  const closeGarage = () => {
+    if (history.state?.garage) history.back();
+    else setGarageOpen(false);
+  };
 
   const racing = view?.room.phase === "countdown" || view?.room.phase === "race";
   const quit = () => {
@@ -114,6 +144,27 @@ export default function RaceApp() {
     if (view?.solo && !racing) leave();
     else setAsking(true);
   };
+
+  const onBack = useEffectEvent(() => {
+    const state = history.state ?? {};
+    if (!state.chat) setChatOpen(false);
+    if (!state.garage) setGarageOpen(false);
+    if (view) {
+      if (state.room) return;
+      // Backed out of the room: stay in it, and ask first.
+      history.pushState({ room: true }, "", view.solo ? "/race" : `/race#${view.code}`);
+      quit();
+      return;
+    }
+    setStep(state.step ?? null);
+  });
+  useEffect(() => {
+    window.addEventListener("popstate", onBack);
+    return () => window.removeEventListener("popstate", onBack);
+  }, []);
+
+  // A new car or paint picked in the garage shows in the room straight away.
+  useEffect(() => race?.changeCar(car), [race, car]);
 
   const online = view && !view.solo && view.status === "ready";
   const inLobby = view?.room.phase === "lobby" || view?.room.phase === "done";
@@ -133,12 +184,12 @@ export default function RaceApp() {
           <button className="btn quit-btn" onClick={quit}>
             ✕ Quit
           </button>
-        ) : step === "car" ? (
+        ) : step === "start" || !returning ? (
           <Link className="menu-btn" href="/?open=games">
             ← Games
           </Link>
         ) : (
-          <button className="menu-btn" onClick={() => setStep(step === "join" ? "start" : "car")}>
+          <button className="menu-btn" onClick={back}>
             ← Back
           </button>
         )}
@@ -148,9 +199,13 @@ export default function RaceApp() {
         <span className="spacer" />
         {view && !view.solo && <RoomCode code={view.code} />}
         {online && !docked && (
-          <button className={`sound-btn chat-btn ${chatOpen ? "on" : ""}`} onClick={() => (chatOpen ? closeChat() : openChat())} aria-label="Chat">
+          <button
+            // a new message restarts the shake
+            key={unread ? lastChat : 0}
+            className={`sound-btn chat-btn ${chatOpen ? "on" : ""} ${unread ? "ring" : ""}`}
+            onClick={() => (chatOpen ? closeChat() : openChat())} aria-label="Chat">
             💬 <span>Chat</span>
-            {unread > 0 && <i className="badge">{unread > 9 ? "9+" : unread}</i>}
+            {unread > 0 && <i className="dot" aria-label={`${unread} new`} />}
           </button>
         )}
         {view && (
@@ -164,7 +219,7 @@ export default function RaceApp() {
 
       {!view ? (
         step === "car" ? (
-          <CarStep car={car} invite={urlCode} onNext={() => setStep("start")} />
+          <CarStep car={car} invite={urlCode} done={returning ? "Done ✓" : "Next →"} onNext={() => (returning ? back() : go("start"))} />
         ) : step === "join" ? (
           <JoinStep onJoin={(code) => begin(code, false)} />
         ) : (
@@ -175,10 +230,11 @@ export default function RaceApp() {
             onName={setName}
             onSolo={() => begin("SOLO", true, true)}
             onCreate={() => begin(newCode(), true)}
-            onJoin={() => (urlCode ? begin(urlCode, false) : setStep("join"))}
+            onGarage={() => go("car")}
+            onJoin={() => (urlCode ? begin(urlCode, false) : go("join"))}
             onJoinOther={() => {
               history.replaceState(null, "", "/race");
-              setStep("join");
+              go("join");
             }}
           />
         )
@@ -210,9 +266,16 @@ export default function RaceApp() {
             key={view.code}
             view={view}
             race={race}
+            onGarage={openGarage}
             chat={docked ? <Chat messages={view.chat} myId={view.myId} secure={view.secure} onSend={(t) => void race.say(t)} /> : null}
           />
         )
+      )}
+
+      {garageOpen && view && (
+        <div className="garage-sheet">
+          <CarStep car={car} invite={null} done="Done ✓" onNext={closeGarage} />
+        </div>
       )}
 
       {online && !docked && chatOpen && race && (
@@ -254,11 +317,12 @@ export default function RaceApp() {
   );
 }
 
-/** Step 1: pick a car and its paint. Cars unlock tier by tier as the player gets faster. */
-function CarStep({ car, invite, onNext }: { car: CarLook; invite: string | null; onNext: () => void }) {
+/** The garage: pick a car and its paint. Cars unlock tier by tier as the player gets faster. */
+function CarStep({ car, invite, done, onNext }: { car: CarLook; invite: string | null; done: string; onNext: () => void }) {
   const best = useSyncExternalStore(subscribeProgress, bestSpeed, () => 0);
   const [ring, setRing] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
+  const stripRef = useRef<HTMLDivElement>(null);
   const set = (patch: Partial<CarLook>) => saveCar({ ...getCar(), ...patch });
   const open = CAR_MODELS.filter((m) => isUnlocked(m, best));
   const step = (d: number) => {
@@ -273,11 +337,18 @@ function CarStep({ car, invite, onNext }: { car: CarLook; invite: string | null;
     for (const x of PAINTS) void paintCar({ id: car.id, p: x.hex });
   }, [car.id]);
 
+  // Keep the chosen car in the middle of the strip.
+  useEffect(() => {
+    const strip = stripRef.current;
+    const tile = strip?.querySelector<HTMLElement>(".model.on");
+    if (strip && tile) strip.scrollTo({ left: tile.offsetLeft - (strip.clientWidth - tile.offsetWidth) / 2, behavior: "smooth" });
+  }, [car.id]);
+
   return (
     <div className="setup car-step">
       <div className="garage">
-        <p className="eyebrow">{invite ? `Invited to room ${invite} · step 1 of 2` : "Step 1 of 2"}</p>
-        <h1>Customise your car</h1>
+        {invite && <p className="eyebrow">Invited to room {invite}</p>}
+        <h1>Your garage</h1>
         <div className="stage">
           <button className="stage-arrow" onClick={() => step(-1)} aria-label="Previous car" disabled={open.length < 2}>
             ‹
@@ -294,50 +365,43 @@ function CarStep({ car, invite, onNext }: { car: CarLook; invite: string | null;
         </p>
         <p className="speed-note">
           Your best: <b>{best} wpm</b>
-          {next ? ` · next cars at ${next} wpm` : " · every car unlocked 🏆 More cars coming soon!"}
+          {next ? ` · next cars at ${next} wpm` : " · every car unlocked 🏆"}
         </p>
       </div>
 
       <div className="garage-options">
-        <h3>Car</h3>
-        <div className="tiers">
-          {TIERS.map((tier) => {
-            const cars = CAR_MODELS.filter((m) => m.tier === tier);
-            if (!cars.length) return null;
-            const reached = best >= tier;
+        <h3>
+          Car{" "}
+          <small>
+            {open.length} of {CAR_MODELS.length} unlocked
+          </small>
+        </h3>
+        <div className="model-strip" ref={stripRef}>
+          {CAR_MODELS.map((m) => {
+            const free = isUnlocked(m, best);
             return (
-              <section key={tier} className={`tier ${reached ? "open" : ""}`}>
-                <h4>
-                  {reached ? "🔓" : "🔒"} {tier} wpm
-                  {!reached && <small> · {tier - best} wpm to go</small>}
-                </h4>
-                <div className="model-grid">
-                  {cars.map((m) => {
-                    const free = isUnlocked(m, best);
-                    return (
-                      <button
-                        key={m.id}
-                        className={`model ${car.id === m.id ? "on" : ""} ${free ? "" : "locked"}`}
-                        onClick={() => {
-                          if (free) {
-                            setHint(null);
-                            set({ id: m.id });
-                          } else setHint(`🔒 ${m.name} unlocks at ${m.tier} wpm. Your best is ${best} wpm — race, take a test or type paragraphs to get faster!`);
-                        }}
-                        aria-label={free ? m.name : `${m.name}, locked until ${m.tier} wpm`}
-                      >
-                        <Car look={{ id: m.id, p: free ? car.p : null }} />
-                        <span>{m.name}</span>
-                        {!free && <i className="lock">🔒 {m.tier}</i>}
-                      </button>
-                    );
-                  })}
-                </div>
-              </section>
+              <button
+                key={m.id}
+                className={`model ${car.id === m.id ? "on" : ""} ${free ? "" : "locked"}`}
+                onClick={() => {
+                  if (free) {
+                    setHint(null);
+                    set({ id: m.id });
+                  } else setHint(`🔒 ${m.name} unlocks at ${m.tier} wpm. Your best is ${best} wpm — race, take a test or type paragraphs to get faster!`);
+                }}
+                aria-label={free ? m.name : `${m.name}, locked until ${m.tier} wpm`}
+              >
+                <Car look={{ id: m.id, p: free ? car.p : null }} />
+                <span>{m.name}</span>
+                {!free && <i className="lock">🔒 {m.tier}</i>}
+              </button>
             );
           })}
+          <span className="model soon">
+            🚧
+            <span>More cars soon</span>
+          </span>
         </div>
-        <p className="speed-note">🚧 Faster cars beyond 55 wpm are coming soon — keep practising!</p>
         {hint && <p className="lock-hint">{hint}</p>}
 
         <h3>Paint</h3>
@@ -365,7 +429,7 @@ function CarStep({ car, invite, onNext }: { car: CarLook; invite: string | null;
         </div>
         {ring && <ColourRing value={car.p} onPick={(hex) => set({ p: hex })} onDone={() => setRing(false)} />}
         <button className="btn primary big next-btn" onClick={onNext}>
-          Next →
+          {done}
         </button>
       </div>
     </div>
@@ -378,6 +442,7 @@ function StartStep({
   invite,
   name,
   onName,
+  onGarage,
   onSolo,
   onCreate,
   onJoin,
@@ -387,6 +452,7 @@ function StartStep({
   invite: string | null;
   name: string;
   onName: (name: string) => void;
+  onGarage: () => void;
   onSolo: () => void;
   onCreate: () => void;
   onJoin: () => void;
@@ -402,9 +468,10 @@ function StartStep({
           else onSolo();
         }}
       >
-        <div className="play-car" aria-hidden>
+        <button type="button" className="play-car" onClick={onGarage} aria-label="Open the garage">
           <Car look={car} />
-        </div>
+          <span className="garage-chip">🚗 Garage</span>
+        </button>
         {invite && (
           <p className="invite">
             You&apos;re invited to room <b>{invite}</b>
@@ -458,9 +525,9 @@ function StartStep({
 function JoinStep({ onJoin }: { onJoin: (code: string) => void }) {
   const [code, setCode] = useState("");
   return (
-    <div className="setup">
+    <div className="setup join-step">
       <form
-        className="play-card"
+        className="play-card join-card"
         onSubmit={(e) => {
           e.preventDefault();
           if (isCode(code)) onJoin(code);
@@ -487,7 +554,7 @@ function JoinStep({ onJoin }: { onJoin: (code: string) => void }) {
   );
 }
 
-function RaceRoom({ view, race, chat }: { view: RaceView; race: Race; chat: React.ReactNode }) {
+function RaceRoom({ view, race, chat, onGarage }: { view: RaceView; race: Race; chat: React.ReactNode; onGarage: () => void }) {
   const { room, myId, isHost, goAt, status, solo } = view;
   const me = room.players.find((p) => p.id === myId);
   const [words, setWords] = useState(RACE_WORDS[1]);
@@ -583,6 +650,9 @@ function RaceRoom({ view, race, chat }: { view: RaceView; race: Race; chat: Reac
                   {!solo && room.phase === "done" && <p className="muted wait">The room stays open — race again whenever you like.</p>}
                   {lengthPicker}
                   <div className="race-actions">
+                    <button className="btn big garage-btn" onClick={onGarage}>
+                      🚗 Garage
+                    </button>
                     <button className="btn primary big" onClick={() => race.start(words)}>
                       {room.phase === "done" ? "Race again 🏁" : solo || room.players.length === 1 ? "Start 🏁" : `Start race · ${room.players.length} players 🏁`}
                     </button>
@@ -598,6 +668,11 @@ function RaceRoom({ view, race, chat }: { view: RaceView; race: Race; chat: Reac
                     <span className="dots" aria-hidden /> Waiting for the host to start {room.phase === "done" ? "the next race" : "the race"}…
                   </p>
                   <p className="muted wait">Chat while you wait. You stay in this room until you quit.</p>
+                  <div className="race-actions center">
+                    <button className="btn garage-btn" onClick={onGarage}>
+                      🚗 Garage · change your car
+                    </button>
+                  </div>
                   {room.phase === "lobby" && <ShareRoom code={view.code} title="Invite more friends" />}
                 </>
               )}
@@ -610,6 +685,7 @@ function RaceRoom({ view, race, chat }: { view: RaceView; race: Race; chat: Reac
           {me?.racing && goRound !== room.round && goAt !== null && (
             <Countdown key={room.round} goAt={goAt} onGo={() => setGoRound(room.round)} />
           )}
+          {canType && me && myRound.pos >= 10 && <Cheer wpm={me.wpm} />}
           {canType ? (
             <TypingSession key={room.round} text={room.text} para onFinish={onFinish} onProgress={onProgress} />
           ) : me?.racing && myRound.done ? (
@@ -673,7 +749,7 @@ function Track({
             </span>
             <div className="road">
               <div className={`car-slot ${boost ? "boost" : ""}`} style={{ transform: `translateX(calc(${pct} * (var(--road-w) - var(--car-w))))` }}>
-                <Car look={p.car} />
+                <Car look={p.car} front />
               </div>
             </div>
             <span className="lane-stat">
@@ -692,6 +768,17 @@ function Track({
         );
       })}
     </div>
+  );
+}
+
+/** A word of encouragement for the speed so far. */
+function Cheer({ wpm }: { wpm: number }) {
+  const [band, text] =
+    wpm < 20 ? ["slow", "You are too slow 🐢 speed up!"] : wpm < 30 ? ["ok", "Doing great 👍"] : wpm < 50 ? ["mid", "Keep practicing 💪"] : ["top", "Amazing! 🔥"];
+  return (
+    <p key={band} className={`cheer ${band}`} role="status">
+      {text}
+    </p>
   );
 }
 
@@ -805,14 +892,23 @@ function ShareRoom({ code, title }: { code: string; title: string }) {
       <h2>{title}</h2>
       <div className="code-box">
         <span className="muted">Room password</span>
-        <button className="code-big" onClick={() => copy("code")} title="Copy password" aria-label={`Copy password ${code}`}>
-          {code.split("").map((ch, i) => (
-            <i key={i}>{ch}</i>
-          ))}
-        </button>
-        <button className={`btn copy-code ${copied === "code" ? "done" : ""}`} onClick={() => copy("code")}>
-          {copied === "code" ? "✓ Password copied" : "📋 Copy password"}
-        </button>
+        <div className="code-row">
+          <button className="code-big" onClick={() => copy("code")} title="Copy password" aria-label={`Copy password ${code}`}>
+            {code.split("").map((ch, i) => (
+              <i key={i}>{ch}</i>
+            ))}
+          </button>
+          <button className={`copy-code ${copied === "code" ? "done" : ""}`} onClick={() => copy("code")} title="Copy password" aria-label="Copy password">
+            {copied === "code" ? (
+              "✓"
+            ) : (
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <rect x="9" y="9" width="11" height="11" rx="2" />
+                <path d="M5 15V6a2 2 0 0 1 2-2h9" />
+              </svg>
+            )}
+          </button>
+        </div>
         <small className="muted">Friends pick Join game and paste or type it</small>
       </div>
       <div className="share">

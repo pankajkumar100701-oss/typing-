@@ -8,36 +8,37 @@
 import { getProgress } from "./progress";
 
 export type CarLook = { id: string; p: string | null };
-export type CarModel = { id: string; name: string; tier: number };
+/** `span`: the share of the frame the car fills when it's narrower than the frame (its nose is on the right edge). */
+export type CarModel = { id: string; name: string; tier: number; span?: number };
 
 export const TIERS = [10, 20, 30, 40, 50, 55];
 
 export const CAR_MODELS: CarModel[] = [
-  { id: "fiat", name: "Cinquecento", tier: 10 },
-  { id: "hatch", name: "Family Hatch", tier: 10 },
-  { id: "bubble", name: "Bubble", tier: 10 },
-  { id: "city", name: "City Hatch", tier: 10 },
-  { id: "sunny", name: "Sunny Hatch", tier: 10 },
-  { id: "wagon", name: "Old Wagon", tier: 20 },
-  { id: "rusty", name: "Rust Bucket", tier: 20 },
+  { id: "fiat", name: "Cinquecento", tier: 10, span: 0.63 },
+  { id: "hatch", name: "Family Hatch", tier: 10, span: 0.67 },
+  { id: "bubble", name: "Bubble", tier: 10, span: 0.42 },
+  { id: "city", name: "City Hatch", tier: 10, span: 0.68 },
+  { id: "sunny", name: "Sunny Hatch", tier: 10, span: 0.72 },
+  { id: "wagon", name: "Old Wagon", tier: 20, span: 0.87 },
+  { id: "rusty", name: "Rust Bucket", tier: 20, span: 0.82 },
   { id: "etype", name: "E-Type", tier: 20 },
-  { id: "hotrod", name: "Hot Rod", tier: 20 },
+  { id: "hotrod", name: "Hot Rod", tier: 20, span: 0.76 },
   { id: "muscle", name: "Muscle Car", tier: 20 },
   { id: "racer", name: "Vintage Racer", tier: 30 },
-  { id: "cruiser-red", name: "Red Cruiser", tier: 30 },
-  { id: "cruiser-blue", name: "Blue Cruiser", tier: 30 },
+  { id: "cruiser-red", name: "Red Cruiser", tier: 30, span: 0.86 },
+  { id: "cruiser-blue", name: "Blue Cruiser", tier: 30, span: 0.84 },
   { id: "roadster", name: "Roadster", tier: 30 },
-  { id: "royal", name: "Royal Classic", tier: 30 },
+  { id: "royal", name: "Royal Classic", tier: 30, span: 0.76 },
   { id: "aston", name: "Aston", tier: 40 },
   { id: "amg", name: "AMG GT", tier: 40 },
   { id: "f40", name: "F40", tier: 40 },
   { id: "gt40", name: "GT40", tier: 40 },
   { id: "mclaren", name: "McLaren F1", tier: 40 },
   { id: "camaro", name: "Camaro", tier: 50 },
-  { id: "mater", name: "Tow Truck", tier: 50 },
+  { id: "mater", name: "Tow Truck", tier: 50, span: 0.42 },
   { id: "porsche", name: "Porsche 911", tier: 50 },
   { id: "storm", name: "Storm", tier: 50 },
-  { id: "mcqueen", name: "Lightning", tier: 50 },
+  { id: "mcqueen", name: "Lightning", tier: 50, span: 0.87 },
   { id: "supra", name: "Supra F&F", tier: 55 },
   { id: "grsupra", name: "GR Supra", tier: 55 },
   { id: "supra-gt", name: "Supra GT", tier: 55 },
@@ -118,6 +119,15 @@ export function getCar(): CarLook {
 }
 
 export const getCarOnServer = () => DEFAULT_CAR;
+
+/** Someone who has picked a car before goes straight to the start screen. */
+export function hasSavedCar() {
+  try {
+    return localStorage.getItem(KEY) !== null;
+  } catch {
+    return false;
+  }
+}
 
 export function saveCar(car: CarLook) {
   saved = cleanCar(car);

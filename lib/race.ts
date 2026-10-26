@@ -51,7 +51,8 @@ export type RaceView = {
 type ToHost =
   | { t: "join"; name: string; car: CarLook }
   | { t: "progress"; pos: number; wpm: number; acc: number; clean: boolean }
-  | { t: "chat"; m: Sealed };
+  | { t: "chat"; m: Sealed }
+  | { t: "car"; car: CarLook };
 type ToGuest =
   | { t: "welcome"; id: string }
   | { t: "full" }
@@ -281,7 +282,20 @@ export class Race {
     this.hostConn?.send({ t: "progress", pos, wpm, acc, clean } satisfies ToHost);
   }
 
+  /** A new car or paint from the garage, shown to everyone in the room. */
+  changeCar(car: CarLook) {
+    if (car.id === this.car.id && car.p === this.car.p) return;
+    this.car = car;
+    if (this.view.isHost) this.setCar(this.view.myId, car);
+    else if (this.hostConn?.open) this.hostConn.send({ t: "car", car } satisfies ToHost);
+  }
+
   // ---------- host ----------
+
+  private setCar(id: string, car: unknown) {
+    const look = cleanCar(car);
+    this.setRoom({ players: this.view.room.players.map((p) => (p.id === id ? { ...p, car: look } : p)) });
+  }
 
   private newPlayer(id: string, name: string, car: CarLook): Player {
     return { id, name, car, racing: false, pos: 0, wpm: 0, acc: 100, finished: null, messy: false, place: null };
@@ -292,6 +306,7 @@ export class Race {
       const msg = data as ToHost;
       if (msg.t === "join") this.join(conn, msg.name, msg.car);
       else if (!this.conns.has(conn.peer)) return;
+      else if (msg.t === "car") this.setCar(conn.peer, msg.car);
       else if (msg.t === "progress") this.update(conn.peer, Number(msg.pos) || 0, Number(msg.wpm) || 0, Number(msg.acc) || 0, !!msg.clean);
       else if (msg.t === "chat" && msg.m && typeof msg.m === "object") {
         this.relay(conn.peer, msg.m);
