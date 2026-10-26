@@ -277,7 +277,7 @@ function CarStep({ car, invite, onNext }: { car: CarLook; invite: string | null;
         </p>
         <p className="speed-note">
           Your best: <b>{best} wpm</b>
-          {next ? ` · next cars at ${next} wpm` : " · every car unlocked 🏆"}
+          {next ? ` · next cars at ${next} wpm` : " · every car unlocked 🏆 More cars coming soon!"}
         </p>
       </div>
 
@@ -320,6 +320,7 @@ function CarStep({ car, invite, onNext }: { car: CarLook; invite: string | null;
             );
           })}
         </div>
+        <p className="speed-note">🚧 Faster cars beyond 55 wpm are coming soon — keep practising!</p>
         {hint && <p className="lock-hint">{hint}</p>}
 
         <h3>Paint</h3>

@@ -2,7 +2,7 @@
 // or the photo's own), saved in the browser. Each car has a cut-out photo and a mask of its
 // painted panels; a new colour is painted onto those panels only, keeping the photo's light and shade.
 //
-// Cars unlock with speed: each tier opens at its wpm (10, 20 … 100), measured by the player's best
+// Cars unlock with speed: each tier opens at its wpm (10, 20 … 50, then 55), measured by the player's best
 // clean speed in races, timed tests and paragraph lessons. The first car is always free.
 
 import { getProgress } from "./progress";
@@ -10,17 +10,41 @@ import { getProgress } from "./progress";
 export type CarLook = { id: string; p: string | null };
 export type CarModel = { id: string; name: string; tier: number };
 
-export const TIERS = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+export const TIERS = [10, 20, 30, 40, 50, 55];
 
-// Stand-ins until the full set of ten cars per tier arrives.
 export const CAR_MODELS: CarModel[] = [
-  { id: "supra", name: "Supra F&F", tier: 10 },
-  { id: "grsupra", name: "GR Supra", tier: 10 },
-  { id: "supra-gt", name: "Supra GT", tier: 20 },
-  { id: "ferrari", name: "Ferrari", tier: 30 },
-  { id: "lambo", name: "Lambo", tier: 40 },
-  { id: "lambo-green", name: "Lambo SVJ", tier: 50 },
-  { id: "bugatti", name: "Bugatti", tier: 60 },
+  { id: "fiat", name: "Cinquecento", tier: 10 },
+  { id: "hatch", name: "Family Hatch", tier: 10 },
+  { id: "bubble", name: "Bubble", tier: 10 },
+  { id: "city", name: "City Hatch", tier: 10 },
+  { id: "sunny", name: "Sunny Hatch", tier: 10 },
+  { id: "wagon", name: "Old Wagon", tier: 20 },
+  { id: "rusty", name: "Rust Bucket", tier: 20 },
+  { id: "etype", name: "E-Type", tier: 20 },
+  { id: "hotrod", name: "Hot Rod", tier: 20 },
+  { id: "muscle", name: "Muscle Car", tier: 20 },
+  { id: "racer", name: "Vintage Racer", tier: 30 },
+  { id: "cruiser-red", name: "Red Cruiser", tier: 30 },
+  { id: "cruiser-blue", name: "Blue Cruiser", tier: 30 },
+  { id: "roadster", name: "Roadster", tier: 30 },
+  { id: "royal", name: "Royal Classic", tier: 30 },
+  { id: "aston", name: "Aston", tier: 40 },
+  { id: "amg", name: "AMG GT", tier: 40 },
+  { id: "f40", name: "F40", tier: 40 },
+  { id: "gt40", name: "GT40", tier: 40 },
+  { id: "mclaren", name: "McLaren F1", tier: 40 },
+  { id: "camaro", name: "Camaro", tier: 50 },
+  { id: "mater", name: "Tow Truck", tier: 50 },
+  { id: "porsche", name: "Porsche 911", tier: 50 },
+  { id: "storm", name: "Storm", tier: 50 },
+  { id: "mcqueen", name: "Lightning", tier: 50 },
+  { id: "supra", name: "Supra F&F", tier: 55 },
+  { id: "grsupra", name: "GR Supra", tier: 55 },
+  { id: "supra-gt", name: "Supra GT", tier: 55 },
+  { id: "ferrari", name: "Ferrari", tier: 55 },
+  { id: "lambo", name: "Lambo", tier: 55 },
+  { id: "lambo-green", name: "Lambo SVJ", tier: 55 },
+  { id: "bugatti", name: "Bugatti", tier: 55 },
 ];
 
 /** Ready-made paints; the colour ring offers any other. */
