@@ -1233,7 +1233,7 @@ button:disabled {
   color: #ffd56b;
 }
 .road {
-  --car-w: calc(var(--lane-h) * 2.1);
+  --car-w: calc(var(--lane-h) * 2.7);
   --road-w: 100cqw;
   container-type: inline-size;
   position: relative;
@@ -1566,6 +1566,1128 @@ button:disabled {
   }
   .race-tag,
   .lane-name small {
+    display: none;
+  }
+}
+
+/* ---------- full screen ---------- */
+.fs-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: 99px;
+  border: 1px solid var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.fs-btn.on {
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--muted);
+}
+.launch-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: #0b1020a6;
+  backdrop-filter: blur(6px);
+  animation: fade 0.2s ease-out;
+}
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+.launch-card {
+  width: min(380px, 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 24px 22px 16px;
+  border-radius: 20px;
+  background: var(--surface);
+  text-align: center;
+  box-shadow: 0 20px 60px #0b102066;
+  animation: pop 0.25s ease-out;
+}
+.launch-card h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 500;
+}
+.launch-card h2 b {
+  color: var(--accent);
+}
+.launch-card p {
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+.launch-icon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.launch-icon svg {
+  width: 28px;
+  height: 28px;
+}
+.btn.big {
+  width: 100%;
+  padding: 0.8em 1.2em;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 700;
+}
+.race-actions .btn.big {
+  width: auto;
+}
+.btn.danger {
+  background: var(--bad);
+  border-color: var(--bad);
+  color: #fff;
+}
+
+/* ---------- menu drawer items ---------- */
+.menu-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  text-align: left;
+}
+.menu-item:hover,
+.menu-item.on {
+  border-color: var(--accent);
+  background: linear-gradient(90deg, var(--accent-soft), var(--surface));
+}
+.menu-item i {
+  font-style: normal;
+  font-weight: 700;
+  color: var(--accent);
+}
+.menu-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  background: var(--sky-2);
+  font-size: 1.3rem;
+  color: var(--accent);
+}
+
+/* ---------- full pages: Typing Practice, Games ---------- */
+.page {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.page-head {
+  flex: none;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px 0;
+}
+.page-head h1 {
+  margin: 0;
+  font-size: 1.3rem;
+  text-align: center;
+}
+.page-head .btn {
+  justify-self: start;
+}
+.page-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: safe center;
+  gap: 16px;
+  padding: 14px 16px 20px;
+}
+.hub-grid {
+  width: min(1000px, 100%);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+}
+.hub-card {
+  --tone: var(--accent);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-height: 150px;
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  border-top: 4px solid var(--tone);
+  background: var(--surface);
+  text-align: left;
+  box-shadow: 0 4px 16px #1d26330f;
+  transition:
+    transform 0.15s,
+    box-shadow 0.15s;
+}
+.hub-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 26px #1d26331f;
+}
+.hub-card.tone-1 {
+  --tone: #2f9e5b;
+}
+.hub-card.tone-2 {
+  --tone: #8e4ec6;
+}
+.hub-card.tone-3 {
+  --tone: #f76b15;
+}
+.hub-card.tone-4 {
+  --tone: #12a5b5;
+}
+.hub-num {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--tone);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.hub-icon {
+  font-size: 1.8rem;
+  line-height: 1;
+  margin-bottom: 6px;
+}
+.hub-card b {
+  font-size: 1.1rem;
+}
+.hub-card small {
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+.hub-meta {
+  margin-top: auto;
+  padding-top: 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--tone);
+}
+.hub-meta em {
+  font-style: normal;
+  color: var(--good);
+}
+.page-body .words-pick {
+  width: min(560px, 100%);
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.lesson-grid {
+  width: min(1000px, 100%);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+}
+.lesson-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  text-align: left;
+}
+.lesson-card:hover {
+  border-color: var(--accent);
+}
+.lesson-card.current {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.lesson-card b {
+  font-size: 0.95rem;
+}
+.lesson-card .best {
+  margin-top: 4px;
+  font-size: 0.75rem;
+}
+.best.none {
+  color: var(--faint);
+}
+.test-page {
+  width: min(620px, 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  text-align: center;
+}
+.minute-grid {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+}
+.minute-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 14px 6px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: 0 4px 14px #1d26330f;
+}
+.minute-card:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.minute-card b {
+  font-size: 1.8rem;
+  line-height: 1.1;
+}
+.minute-card small {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+.test-page .custom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.hub-grid.games {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 340px));
+  justify-content: center;
+}
+.game-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: 0 6px 20px #1d263314;
+  transition: transform 0.15s;
+}
+a.game-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--accent);
+}
+.game-art {
+  display: grid;
+  place-items: end center;
+  height: 120px;
+  padding: 10px 14px 12px;
+  border-radius: 12px;
+  background:
+    linear-gradient(transparent 70%, #4a5668 70% 73%, #3a4556 73%),
+    linear-gradient(180deg, #8ec5ff, #d7ecff);
+}
+.game-art .car {
+  width: 100%;
+  max-width: 260px;
+}
+.soon-art {
+  place-items: center;
+  font-size: 2.6rem;
+  background: var(--panel);
+}
+.game-card b {
+  font-size: 1.15rem;
+}
+.game-card small {
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+.game-play {
+  align-self: flex-start;
+  margin-top: 6px;
+  padding: 6px 14px;
+  border-radius: 99px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+.game-card.soon {
+  opacity: 0.6;
+}
+.game-card.soon .game-play {
+  background: var(--panel);
+  color: var(--muted);
+}
+
+/* ---------- car race: setup ---------- */
+.setup {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  place-items: safe center;
+  padding: 14px;
+}
+.car-step {
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 18px;
+  max-width: 1100px;
+  width: 100%;
+  margin: 0 auto;
+}
+.garage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+.eyebrow {
+  margin: 0;
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.garage h1 {
+  margin: 2px 0 10px;
+  font-size: clamp(1.3rem, 3vw, 1.9rem);
+}
+.stage {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 6px;
+}
+.stage-car {
+  position: relative;
+  padding: 10px 6px 0;
+}
+/* a soft floor and spotlight under the car */
+.stage-car::before {
+  content: "";
+  position: absolute;
+  left: 4%;
+  right: 4%;
+  bottom: -6px;
+  height: 18px;
+  border-radius: 50%;
+  background: radial-gradient(#1d263340, transparent 70%);
+}
+.stage-car .car {
+  position: relative;
+  width: 100%;
+  animation: idle 2.4s ease-in-out infinite;
+}
+@keyframes idle {
+  50% {
+    transform: translateY(-2px);
+  }
+}
+.stage-arrow {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  font-size: 1.6rem;
+  line-height: 1;
+  color: var(--accent);
+  box-shadow: 0 2px 8px #1d26331a;
+}
+.stage-name {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.stage-name b {
+  color: var(--text);
+}
+.garage-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: 0 6px 24px #1d26331a;
+}
+.garage-options h3 {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.model-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 6px;
+}
+.model {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 4px 5px;
+  border-radius: 10px;
+  border: 1.5px solid var(--line);
+  background: var(--sky-2);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+.model .car {
+  width: 100%;
+}
+.model.on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.swatch {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px var(--line);
+}
+.swatch.original {
+  background: conic-gradient(#e5303a, #f5c400, #2f9e5b, #1f6feb, #8e4ec6, #e5303a);
+}
+.swatch.on {
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 0 0 4px var(--accent);
+  transform: scale(1.08);
+}
+.next-btn {
+  margin-top: 6px;
+}
+.play-card {
+  width: min(420px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px;
+  border-radius: 20px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: 0 10px 30px #1d26331f;
+}
+.play-card h2 {
+  margin: 0;
+}
+.play-car {
+  display: grid;
+  place-items: center;
+  padding: 6px 30px 0;
+}
+.play-car .car {
+  width: 100%;
+  max-width: 260px;
+}
+.invite {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  text-align: center;
+  font-size: 0.9rem;
+}
+.invite b {
+  font-family: var(--font-code);
+  letter-spacing: 0.1em;
+  color: var(--accent);
+}
+/* the big game-style PLAY button */
+.play-btn {
+  padding: 14px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #5aa2ff, #1f6feb);
+  color: #fff;
+  font-size: clamp(1.5rem, 5vw, 2.1rem);
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-shadow: 0 2px 0 #0b3d9180;
+  box-shadow:
+    0 5px 0 #0f4fb8,
+    0 10px 20px #1f6feb55;
+  transition: transform 0.08s;
+}
+.play-btn:active:not(:disabled) {
+  transform: translateY(4px);
+  box-shadow:
+    0 1px 0 #0f4fb8,
+    0 4px 10px #1f6feb55;
+}
+.play-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 4px;
+}
+.play-sub {
+  padding: 12px 8px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--text);
+  box-shadow: 0 3px 0 var(--line);
+}
+.play-sub:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--line);
+}
+.play-hint {
+  margin: 0;
+  text-align: center;
+  font-size: 0.75rem;
+}
+.link-btn {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: underline;
+}
+.code-input {
+  width: 100%;
+  min-width: 0;
+  padding: 12px;
+  border-radius: 12px;
+  border: 2px solid var(--line);
+  background: var(--sky-2);
+  font-family: var(--font-code);
+  font-size: clamp(1.6rem, 7vw, 2.2rem);
+  font-weight: 700;
+  letter-spacing: 0.35em;
+  text-align: center;
+  text-transform: uppercase;
+  color: var(--text);
+}
+.code-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* ---------- car race: room ---------- */
+.race-app .quit-btn {
+  padding: 5px 12px;
+  font-weight: 700;
+}
+.lobby {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.lobby .race-panel {
+  flex: 1;
+}
+.lobby-chat {
+  flex: none;
+  width: min(380px, 38vw);
+  display: flex;
+  min-height: 0;
+  padding: 10px 10px 10px 0;
+}
+.share-room {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.code-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px dashed var(--accent);
+  background: var(--sky-2);
+}
+.code-big {
+  display: flex;
+  gap: 6px;
+}
+.code-big i {
+  display: grid;
+  place-items: center;
+  width: clamp(34px, 7vw, 44px);
+  height: clamp(42px, 9vw, 54px);
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: 0 3px 0 var(--line);
+  font-family: var(--font-code);
+  font-size: clamp(1.3rem, 4vw, 1.7rem);
+  font-style: normal;
+  font-weight: 800;
+  color: var(--accent);
+}
+.dots::after {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 4px;
+  border-radius: 50%;
+  background: var(--good);
+  animation: blink 1.2s ease-in-out infinite;
+}
+@keyframes blink {
+  50% {
+    opacity: 0.2;
+  }
+}
+.watching {
+  margin: 8px 10px 0;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.race-actions.center {
+  justify-content: center;
+}
+.r-car {
+  flex: none;
+  width: 44px;
+}
+.r-car .car {
+  width: 100%;
+}
+.chat-btn {
+  position: relative;
+}
+.chat-btn.on {
+  background: var(--accent-soft);
+}
+.badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 99px;
+  background: var(--bad);
+  color: #fff;
+  font-size: 0.65rem;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  animation: pop 0.25s ease-out;
+}
+
+/* ---------- chat ---------- */
+.chat {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: 0 6px 24px #1d26331a;
+  overflow: hidden;
+}
+.chat-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(90deg, var(--accent-soft), var(--surface));
+}
+.chat-title {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.chat-lock {
+  color: var(--good);
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+.chat-list {
+  flex: 1;
+  min-height: 80px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px;
+  background:
+    radial-gradient(circle at 20% 10%, #dceaff80, transparent 40%),
+    radial-gradient(circle at 80% 90%, #e9e1fb80, transparent 40%),
+    var(--sky-2);
+  user-select: text;
+  -webkit-user-select: text;
+}
+.chat-empty {
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.chat-empty span {
+  font-size: 2rem;
+}
+.chat-note {
+  align-self: center;
+  margin: 6px 0;
+  padding: 3px 10px;
+  border-radius: 99px;
+  background: #1d26330f;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+.chat-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+}
+.chat-row.first {
+  margin-top: 6px;
+}
+.chat-row.mine {
+  justify-content: flex-end;
+}
+.chat-avatar {
+  flex: none;
+  width: 34px;
+}
+.chat-avatar .car {
+  width: 100%;
+}
+.bubble {
+  position: relative;
+  max-width: 78%;
+  display: flex;
+  flex-direction: column;
+  padding: 6px 10px 4px;
+  border-radius: 16px 16px 16px 4px;
+  background: var(--surface);
+  box-shadow: 0 1px 2px #1d26331f;
+  font-size: 0.9rem;
+  line-height: 1.35;
+  animation: msg 0.18s ease-out;
+}
+@keyframes msg {
+  from {
+    transform: translateY(6px) scale(0.97);
+    opacity: 0;
+  }
+}
+.chat-row.mine .bubble {
+  border-radius: 16px 16px 4px 16px;
+  background: linear-gradient(135deg, #3b8bff, #1f6feb);
+  color: #fff;
+}
+.bubble-name {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+.bubble-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.bubble time {
+  align-self: flex-end;
+  font-size: 0.6rem;
+  opacity: 0.6;
+}
+.bubble.big {
+  background: none !important;
+  box-shadow: none;
+  padding: 0 2px;
+  color: var(--text) !important;
+}
+.bubble.big .bubble-text {
+  font-size: 2.2rem;
+  line-height: 1.1;
+}
+.bubble.locked .bubble-text {
+  font-style: italic;
+  opacity: 0.7;
+}
+.chat-quick {
+  flex: none;
+  display: flex;
+  gap: 6px;
+  padding: 6px 10px 0;
+  overflow-x: auto;
+}
+.quick {
+  flex: none;
+  padding: 3px 10px;
+  border-radius: 99px;
+  border: 1px solid var(--line);
+  background: var(--sky-2);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+.quick:hover {
+  border-color: var(--accent);
+  transform: scale(1.06);
+}
+.emoji-grid {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(34px, 1fr));
+  max-height: 150px;
+  overflow-y: auto;
+  margin: 6px 10px 0;
+  padding: 6px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--sky-2);
+}
+.emoji-grid button {
+  height: 34px;
+  border-radius: 8px;
+  font-size: 1.3rem;
+}
+.emoji-grid button:hover {
+  background: var(--accent-soft);
+}
+.chat-form {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px 10px;
+}
+.chat-form input {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 14px;
+  border-radius: 99px;
+  border: 1px solid var(--line);
+  background: var(--sky-2);
+  font-size: 16px; /* 16px stops iPhones zooming in */
+  color: var(--text);
+}
+.chat-form input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.emoji-btn {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  font-size: 1.3rem;
+}
+.emoji-btn.on {
+  background: var(--accent-soft);
+}
+.send-btn {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 3px 10px #1f6feb55;
+}
+.chat-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 35;
+  display: flex;
+  justify-content: flex-end;
+  background: #1d263340;
+  animation: fade 0.15s ease-out;
+}
+.chat-sheet > div {
+  width: min(400px, 100vw);
+  height: 100%;
+  display: flex;
+  padding: 8px;
+  padding-right: max(8px, var(--safe-r));
+  animation: sheet 0.2s ease-out;
+}
+@keyframes sheet {
+  from {
+    transform: translateX(40px);
+    opacity: 0;
+  }
+}
+
+/* ---------- quit dialog ---------- */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: #0b102080;
+  backdrop-filter: blur(3px);
+  animation: fade 0.15s ease-out;
+}
+.modal {
+  width: min(360px, 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 22px 20px 18px;
+  border-radius: 18px;
+  background: var(--surface);
+  text-align: center;
+  box-shadow: 0 20px 60px #0b102055;
+  animation: pop 0.2s ease-out;
+}
+.modal h2 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+.modal p {
+  margin: 0 0 8px;
+}
+.modal-icon {
+  font-size: 2rem;
+}
+.modal .btn {
+  min-width: 110px;
+  padding: 0.65em 1.2em;
+  font-weight: 700;
+}
+
+/* ---------- narrow and short screens for the new pages ---------- */
+@media (max-width: 760px) {
+  .car-step {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .minute-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .fs-btn span {
+    display: none;
+  }
+  .chat-btn span {
+    display: none;
+  }
+}
+@media (max-height: 480px) {
+  .page-head {
+    padding-top: 6px;
+  }
+  .page-head h1 {
+    font-size: 1.05rem;
+  }
+  .page-body {
+    gap: 10px;
+    padding: 8px 12px 12px;
+  }
+  .hub-card {
+    min-height: 0;
+    padding: 10px 12px;
+  }
+  .hub-icon {
+    font-size: 1.3rem;
+    margin-bottom: 2px;
+  }
+  .hub-grid {
+    grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+    gap: 8px;
+  }
+  .game-art {
+    height: 84px;
+  }
+  .setup {
+    padding: 8px;
+  }
+  .car-step {
+    gap: 10px;
+  }
+  .garage h1 {
+    margin-bottom: 4px;
+  }
+  .garage-options {
+    padding: 10px;
+    gap: 6px;
+  }
+  .model-grid {
+    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  }
+  .swatch {
+    width: 24px;
+    height: 24px;
+  }
+  .play-card {
+    gap: 8px;
+    padding: 12px;
+  }
+  .play-car {
+    display: none;
+  }
+  .play-btn {
+    padding: 8px;
+  }
+  .play-sub {
+    padding: 8px;
+  }
+  .launch-card {
+    padding: 14px 18px 10px;
+    gap: 6px;
+  }
+  .launch-icon {
     display: none;
   }
 }

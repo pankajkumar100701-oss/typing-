@@ -1,38 +1,11 @@
 // Tiny synthesized sounds (Web Audio) — no audio files needed.
 
 let ctx: AudioContext | null = null;
-let muted: boolean | null = null;
 const listeners = new Set<() => void>();
-const KEY = "typefast:muted";
 
 export function subscribeSound(listener: () => void) {
   listeners.add(listener);
   return () => listeners.delete(listener);
-}
-
-export function isMuted(): boolean {
-  if (muted === null) {
-    try {
-      muted = localStorage.getItem(KEY) === "1";
-    } catch {
-      muted = false;
-    }
-  }
-  return muted;
-}
-
-export function isMutedOnServer() {
-  return false;
-}
-
-export function toggleMute() {
-  muted = !isMuted();
-  try {
-    localStorage.setItem(KEY, muted ? "1" : "0");
-  } catch {
-    // storage blocked — the setting lasts for this visit only
-  }
-  listeners.forEach((l) => l());
 }
 
 function tone(freq: number, start: number, duration: number, type: OscillatorType, gain: number) {
@@ -74,7 +47,6 @@ export function primeAudio() {
 }
 
 function play(fn: () => void) {
-  if (isMuted()) return;
   try {
     // While audio is still waking up, skip the sound — otherwise all the queued clicks
     // would play at once in a crackly burst.
