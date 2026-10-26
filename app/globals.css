@@ -1517,9 +1517,8 @@ button:disabled {
   .nav-btn.fs {
     display: none;
   }
-  /* room for the Quit button; the share screen shows the full link anyway */
   .race-app .room-code {
-    display: none;
+    padding: 4px 7px;
   }
   .session {
     gap: 6px;
@@ -2253,6 +2252,23 @@ a.game-card:hover {
 .code-big {
   display: flex;
   gap: 6px;
+  /* long-press or drag selects the whole password, so it can be copied by hand too */
+  user-select: all;
+  -webkit-user-select: all;
+}
+.copy-code {
+  font-weight: 700;
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--surface);
+}
+.copy-code.done {
+  color: var(--good);
+  border-color: var(--good);
+}
+.room-code.copied {
+  color: var(--good);
+  border-color: var(--good);
 }
 .code-big i {
   display: grid;

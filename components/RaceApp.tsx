@@ -127,7 +127,7 @@ export default function RaceApp() {
           type<b>fast</b> <span className="race-tag">Car Race</span>
         </span>
         <span className="spacer" />
-        {view && !view.solo && <span className="room-code">🔑 {view.code}</span>}
+        {view && !view.solo && <RoomCode code={view.code} />}
         {online && !docked && (
           <button className={`sound-btn chat-btn ${chatOpen ? "on" : ""}`} onClick={() => setChatOpen((o) => !o)} aria-label="Chat">
             💬 <span>Chat</span>
@@ -495,7 +495,7 @@ function RaceRoom({ view, race, chat }: { view: RaceView; race: Race; chat: Reac
               {room.phase === "done" && <Results players={room.players} />}
               {isHost ? (
                 <>
-                  {!solo && room.phase === "lobby" && <ShareRoom code={view.code} />}
+                  {!solo && room.phase === "lobby" && <ShareRoom code={view.code} title="Invite friends" />}
                   {!solo && room.phase === "done" && <p className="muted wait">The room stays open — race again whenever you like.</p>}
                   {lengthPicker}
                   <div className="race-actions">
@@ -514,6 +514,7 @@ function RaceRoom({ view, race, chat }: { view: RaceView; race: Race; chat: Reac
                     <span className="dots" aria-hidden /> Waiting for the host to start {room.phase === "done" ? "the next race" : "the race"}…
                   </p>
                   <p className="muted wait">Chat while you wait. You stay in this room until you quit.</p>
+                  {room.phase === "lobby" && <ShareRoom code={view.code} title="Invite more friends" />}
                 </>
               )}
             </div>
@@ -662,17 +663,54 @@ function Results({ players }: { players: Player[] }) {
   );
 }
 
-function ShareRoom({ code }: { code: string }) {
+/** Clipboard copy that also works on plain-http pages (a phone on the LAN address), where navigator.clipboard is missing. */
+async function copyText(value: string) {
+  try {
+    await navigator.clipboard.writeText(value);
+    return true;
+  } catch {
+    const area = document.createElement("textarea");
+    area.value = value;
+    area.setAttribute("readonly", "");
+    area.style.cssText = "position:fixed;top:0;left:0;opacity:0";
+    document.body.appendChild(area);
+    area.select();
+    area.setSelectionRange(0, value.length);
+    let ok = false;
+    try {
+      ok = document.execCommand("copy");
+    } catch {
+      // no way to copy here
+    }
+    area.remove();
+    if (!ok) window.prompt("Copy this", value);
+    return ok;
+  }
+}
+
+/** The room password in the top bar: tap to copy. */
+function RoomCode({ code }: { code: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      className={`room-code ${copied ? "copied" : ""}`}
+      onClick={async () => {
+        if (!(await copyText(code))) return;
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 1600);
+      }}
+      title="Copy room password"
+    >
+      {copied ? "✓ Copied" : `🔑 ${code}`}
+    </button>
+  );
+}
+
+function ShareRoom({ code, title }: { code: string; title: string }) {
   const link = raceLink(code);
   const [copied, setCopied] = useState<"" | "code" | "link">("");
   const copy = async (what: "code" | "link") => {
-    const value = what === "code" ? code : link;
-    try {
-      await navigator.clipboard.writeText(value);
-    } catch {
-      window.prompt("Copy this", value);
-      return;
-    }
+    if (!(await copyText(what === "code" ? code : link))) return;
     setCopied(what);
     window.setTimeout(() => setCopied(""), 1600);
   };
@@ -680,15 +718,18 @@ function ShareRoom({ code }: { code: string }) {
     navigator.share?.({ title: "TypeFast car race", text: `Race me in TypeFast! Room password: ${code}`, url: link }).catch(() => {});
   return (
     <div className="share-room">
-      <h2>Invite friends</h2>
+      <h2>{title}</h2>
       <div className="code-box">
         <span className="muted">Room password</span>
-        <button className="code-big" onClick={() => copy("code")} title="Copy password">
+        <button className="code-big" onClick={() => copy("code")} title="Copy password" aria-label={`Copy password ${code}`}>
           {code.split("").map((ch, i) => (
             <i key={i}>{ch}</i>
           ))}
         </button>
-        <small className="muted">{copied === "code" ? "Copied ✓" : "Tap to copy · friends pick Join game and type it"}</small>
+        <button className={`btn copy-code ${copied === "code" ? "done" : ""}`} onClick={() => copy("code")}>
+          {copied === "code" ? "✓ Password copied" : "📋 Copy password"}
+        </button>
+        <small className="muted">Friends pick Join game and paste or type it</small>
       </div>
       <div className="share">
         <input readOnly value={link} onFocus={(e) => e.target.select()} aria-label="Room link" />
