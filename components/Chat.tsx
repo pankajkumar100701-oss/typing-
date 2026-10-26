@@ -64,8 +64,8 @@ export default function Chat({
           <small className="chat-lock">🔒 {secure ? "End-to-end encrypted · only players can read" : "Private to this room's players"}</small>
         </span>
         {onClose && (
-          <button className="nav-btn" onClick={onClose} aria-label="Close chat">
-            ×
+          <button className="chat-back" onClick={onClose}>
+            <span aria-hidden>←</span> Back to game
           </button>
         )}
       </header>

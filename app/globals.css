@@ -2373,6 +2373,23 @@ a.game-card:hover {
   border-bottom: 1px solid var(--line);
   background: linear-gradient(90deg, var(--accent-soft), var(--surface));
 }
+.chat-back {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 600;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+.chat-back:hover {
+  background: var(--panel);
+}
 .chat-title {
   flex: 1;
   display: flex;

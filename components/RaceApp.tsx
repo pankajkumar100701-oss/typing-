@@ -91,6 +91,23 @@ export default function RaceApp() {
     history.replaceState(null, "", "/race");
   };
 
+  // The chat sheet gets its own history entry, so the phone's back button closes the chat
+  // instead of leaving the game.
+  const openChat = () => {
+    history.pushState({ chat: true }, "", location.href);
+    setChatOpen(true);
+  };
+  const closeChat = () => {
+    if (history.state?.chat) history.back();
+    else setChatOpen(false);
+  };
+  useEffect(() => {
+    if (!chatOpen) return;
+    const onBack = () => setChatOpen(false);
+    window.addEventListener("popstate", onBack);
+    return () => window.removeEventListener("popstate", onBack);
+  }, [chatOpen]);
+
   const racing = view?.room.phase === "countdown" || view?.room.phase === "race";
   const quit = () => {
     // Nothing to lose alone in the lobby; otherwise ask first.
@@ -131,7 +148,7 @@ export default function RaceApp() {
         <span className="spacer" />
         {view && !view.solo && <RoomCode code={view.code} />}
         {online && !docked && (
-          <button className={`sound-btn chat-btn ${chatOpen ? "on" : ""}`} onClick={() => setChatOpen((o) => !o)} aria-label="Chat">
+          <button className={`sound-btn chat-btn ${chatOpen ? "on" : ""}`} onClick={() => (chatOpen ? closeChat() : openChat())} aria-label="Chat">
             💬 <span>Chat</span>
             {unread > 0 && <i className="badge">{unread > 9 ? "9+" : unread}</i>}
           </button>
@@ -199,9 +216,9 @@ export default function RaceApp() {
       )}
 
       {online && !docked && chatOpen && race && (
-        <div className="chat-sheet" onClick={() => setChatOpen(false)}>
+        <div className="chat-sheet" onClick={closeChat}>
           <div onClick={(e) => e.stopPropagation()}>
-            <Chat messages={view.chat} myId={view.myId} secure={view.secure} onSend={(t) => void race.say(t)} onClose={() => setChatOpen(false)} />
+            <Chat messages={view.chat} myId={view.myId} secure={view.secure} onSend={(t) => void race.say(t)} onClose={closeChat} />
           </div>
         </div>
       )}
