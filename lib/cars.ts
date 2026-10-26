@@ -1,22 +1,30 @@
-// The car a player drives: one of the photo cars in /public/cars and a paint colour,
-// saved in the browser. Each car has a cut-out photo and a mask of its painted panels;
-// a new colour is painted onto those panels only, keeping the photo's light and shade.
+// The car a player drives: one of the photo cars in /public/cars and a paint colour (any colour,
+// or the photo's own), saved in the browser. Each car has a cut-out photo and a mask of its
+// painted panels; a new colour is painted onto those panels only, keeping the photo's light and shade.
+//
+// Cars unlock with speed: each tier opens at its wpm (10, 20 … 100), measured by the player's best
+// clean speed in races, timed tests and paragraph lessons. The first car is always free.
 
-export type CarLook = { m: number; c: number };
+import { getProgress } from "./progress";
 
-export const CAR_MODELS = [
-  { id: "supra", name: "Supra F&F" },
-  { id: "ferrari", name: "Ferrari" },
-  { id: "grsupra", name: "GR Supra" },
-  { id: "supra-gt", name: "Supra GT" },
-  { id: "lambo", name: "Lambo" },
-  { id: "lambo-green", name: "Lambo SVJ" },
-  { id: "bugatti", name: "Bugatti" },
+export type CarLook = { id: string; p: string | null };
+export type CarModel = { id: string; name: string; tier: number };
+
+export const TIERS = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+
+// Stand-ins until the full set of ten cars per tier arrives.
+export const CAR_MODELS: CarModel[] = [
+  { id: "supra", name: "Supra F&F", tier: 10 },
+  { id: "grsupra", name: "GR Supra", tier: 10 },
+  { id: "supra-gt", name: "Supra GT", tier: 20 },
+  { id: "ferrari", name: "Ferrari", tier: 30 },
+  { id: "lambo", name: "Lambo", tier: 40 },
+  { id: "lambo-green", name: "Lambo SVJ", tier: 50 },
+  { id: "bugatti", name: "Bugatti", tier: 60 },
 ];
 
-/** null = the car's own colour from the photo. */
-export const PAINTS: { name: string; hex: string | null }[] = [
-  { name: "Original", hex: null },
+/** Ready-made paints; the colour ring offers any other. */
+export const PAINTS = [
   { name: "Blue", hex: "#1f6feb" },
   { name: "Red", hex: "#e5303a" },
   { name: "Green", hex: "#2f9e5b" },
@@ -32,15 +40,36 @@ export const PAINTS: { name: string; hex: string | null }[] = [
 ];
 
 const KEY = "typefast:car";
-export const DEFAULT_CAR: CarLook = { m: 0, c: 0 };
+export const DEFAULT_CAR: CarLook = { id: CAR_MODELS[0].id, p: null };
 
-const inRange = (n: unknown, len: number) => (Number.isInteger(n) && (n as number) >= 0 && (n as number) < len ? (n as number) : 0);
+export const modelOf = (id: string) => CAR_MODELS.find((m) => m.id === id) ?? CAR_MODELS[0];
+const isHex = (v: unknown): v is string => typeof v === "string" && /^#[0-9a-f]{6}$/i.test(v);
 
-/** Anything from storage or from another player becomes a valid car. */
+/** Anything from storage or from another player becomes a valid car (old saves used indexes). */
 export function cleanCar(car: unknown): CarLook {
-  const c = (car ?? {}) as Partial<CarLook>;
-  return { m: inRange(c.m, CAR_MODELS.length), c: inRange(c.c, PAINTS.length) };
+  const c = (car ?? {}) as { id?: unknown; p?: unknown; m?: unknown; c?: unknown };
+  const id = typeof c.id === "string" && CAR_MODELS.some((m) => m.id === c.id) ? c.id : DEFAULT_CAR.id;
+  return { id, p: isHex(c.p) ? c.p.toLowerCase() : null };
 }
+
+// ---------- unlocking ----------
+
+/** Runs that count for unlocking: paragraph lessons, timed tests and races, typed at least 80% right. */
+const COUNTS = /^(e\d+|a\d+|test-\d+|race)$/;
+const MIN_ACC = 80;
+
+export function bestSpeed() {
+  let best = 0;
+  for (const [id, b] of Object.entries(getProgress())) if (COUNTS.test(id) && b.acc >= MIN_ACC) best = Math.max(best, b.wpm);
+  return best;
+}
+
+export const isUnlocked = (model: CarModel, best: number) => model === CAR_MODELS[0] || best >= model.tier;
+
+/** The highest tier reached, 0 if none. */
+export const tierReached = (best: number) => TIERS.filter((t) => best >= t).at(-1) ?? 0;
+
+// ---------- the saved car ----------
 
 let saved: CarLook | null = null;
 const listeners = new Set<() => void>();
@@ -58,6 +87,8 @@ export function getCar(): CarLook {
     } catch {
       saved = DEFAULT_CAR;
     }
+    // A car that's no longer unlocked (or no longer exists) falls back to the free one.
+    if (!isUnlocked(modelOf(saved.id), bestSpeed())) saved = { ...saved, id: DEFAULT_CAR.id };
   }
   return saved;
 }
@@ -74,25 +105,25 @@ export function saveCar(car: CarLook) {
   listeners.forEach((l) => l());
 }
 
-export const carSrc = (m: number) => `/cars/${CAR_MODELS[m]?.id ?? CAR_MODELS[0].id}.webp`;
+export const carSrc = (id: string) => `/cars/${modelOf(id).id}.webp`;
 
 // ---------- painting ----------
 
 const painted = new Map<string, string>();
-const pending = new Set<string>();
+const pending = new Map<string, Promise<void>>();
 const paintListeners = new Set<() => void>();
-/** Each car's middle panel brightness: lighter pixels become highlights, darker ones shade. */
-const midLight = new Map<number, number>();
+type Source = { w: number; h: number; base: Uint8ClampedArray; mask: Uint8ClampedArray; mid: number };
+const sources = new Map<string, Promise<Source>>();
 
 export function subscribePaint(listener: () => void) {
   paintListeners.add(listener);
   return () => paintListeners.delete(listener);
 }
 
-/** The picture to show for this car: the painted one once it's ready, the photo until then. */
-export function paintedSrc(look: CarLook) {
-  if (!PAINTS[look.c]?.hex) return carSrc(look.m);
-  return painted.get(`${look.m}-${look.c}`) ?? carSrc(look.m);
+/** The picture for this car once it's ready: the photo itself for the original colour, else the painted one (or null while painting). */
+export function readySrc(look: CarLook) {
+  if (!look.p) return carSrc(look.id);
+  return painted.get(`${modelOf(look.id).id}-${look.p}`) ?? null;
 }
 
 function loadImage(src: string) {
@@ -104,54 +135,91 @@ function loadImage(src: string) {
   });
 }
 
-/** Paint the car in the background; subscribers hear when it's ready. */
-export async function paintCar(look: CarLook) {
-  const hex = PAINTS[look.c]?.hex;
-  const key = `${look.m}-${look.c}`;
-  if (!hex || painted.has(key) || pending.has(key)) return;
-  pending.add(key);
-  try {
-    const id = CAR_MODELS[look.m].id;
-    const [car, mask] = await Promise.all([loadImage(`/cars/${id}.webp`), loadImage(`/cars/${id}-paint.png`)]);
-    const { width: w, height: h } = car;
-    const canvas = document.createElement("canvas");
-    canvas.width = w;
-    canvas.height = h;
-    const g = canvas.getContext("2d", { willReadFrequently: true })!;
-    g.drawImage(mask, 0, 0);
-    const m = g.getImageData(0, 0, w, h).data;
-    g.clearRect(0, 0, w, h);
-    g.drawImage(car, 0, 0);
-    const img = g.getImageData(0, 0, w, h);
-    const p = img.data;
-    const light = (i: number) => (0.2126 * p[i] + 0.7152 * p[i + 1] + 0.0722 * p[i + 2]) / 255;
-
-    let mid = midLight.get(look.m);
-    if (mid === undefined) {
+/** Each car's photo and mask, read once. */
+function source(id: string) {
+  let s = sources.get(id);
+  if (!s) {
+    s = (async () => {
+      const [car, mask] = await Promise.all([loadImage(`/cars/${id}.webp`), loadImage(`/cars/${id}-paint.png`)]);
+      const { width: w, height: h } = car;
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const g = canvas.getContext("2d", { willReadFrequently: true })!;
+      g.drawImage(mask, 0, 0);
+      const m = g.getImageData(0, 0, w, h).data;
+      g.clearRect(0, 0, w, h);
+      g.drawImage(car, 0, 0);
+      const base = g.getImageData(0, 0, w, h).data;
+      // The panels' middle brightness: lighter pixels become highlights, darker ones shade.
       const all: number[] = [];
-      for (let i = 0; i < p.length; i += 4) if (m[i] > 128) all.push(light(i));
+      for (let i = 0; i < base.length; i += 4) if (m[i] > 128) all.push(light(base, i));
       all.sort((a, b) => a - b);
-      mid = Math.min(0.92, Math.max(0.08, all[all.length >> 1] ?? 0.5));
-      midLight.set(look.m, mid);
-    }
-
-    const t = [1, 3, 5].map((o) => parseInt(hex.slice(o, o + 2), 16) / 255);
-    for (let i = 0; i < p.length; i += 4) {
-      const a = m[i] / 255;
-      if (a === 0) continue;
-      const l = light(i);
-      for (let k = 0; k < 3; k++) {
-        const c = l <= mid ? (t[k] * l) / mid : t[k] + ((1 - t[k]) * (l - mid)) / (1 - mid);
-        p[i + k] = Math.round(p[i + k] * (1 - a) + c * 255 * a);
-      }
-    }
-    g.putImageData(img, 0, 0);
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", 0.9));
-    if (blob) painted.set(key, URL.createObjectURL(blob));
-  } catch {
-    // couldn't paint — the car keeps the photo's colour
-  } finally {
-    pending.delete(key);
-    paintListeners.forEach((l) => l());
+      const mid = Math.min(0.92, Math.max(0.08, all[all.length >> 1] ?? 0.5));
+      return { w, h, base, mask: m, mid };
+    })();
+    s.catch(() => sources.delete(id));
+    sources.set(id, s);
   }
+  return s;
+}
+
+const light = (p: Uint8ClampedArray, i: number) => (0.2126 * p[i] + 0.7152 * p[i + 1] + 0.0722 * p[i + 2]) / 255;
+
+/** Paint the car in the background; subscribers hear when it's ready. */
+export function paintCar(look: CarLook) {
+  const id = modelOf(look.id).id;
+  const hex = look.p;
+  const key = `${id}-${hex}`;
+  if (!hex || painted.has(key)) return Promise.resolve();
+  let job = pending.get(key);
+  if (job) return job;
+  job = (async () => {
+    try {
+      const { w, h, base, mask, mid } = await source(id);
+      const out = new Uint8ClampedArray(base);
+      const t = [1, 3, 5].map((o) => parseInt(hex.slice(o, o + 2), 16) / 255);
+      for (let i = 0; i < out.length; i += 4) {
+        const a = mask[i] / 255;
+        if (a === 0) continue;
+        const l = light(base, i);
+        for (let k = 0; k < 3; k++) {
+          const c = l <= mid ? (t[k] * l) / mid : t[k] + ((1 - t[k]) * (l - mid)) / (1 - mid);
+          out[i + k] = Math.round(base[i + k] * (1 - a) + c * 255 * a);
+        }
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      canvas.getContext("2d")!.putImageData(new ImageData(out, w, h), 0, 0);
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", 0.9));
+      if (blob) painted.set(key, URL.createObjectURL(blob));
+    } catch {
+      // couldn't paint — the car keeps the photo's colour
+    } finally {
+      pending.delete(key);
+      paintListeners.forEach((l) => l());
+    }
+  })();
+  pending.set(key, job);
+  return job;
+}
+
+// ---------- colour helpers for the colour ring ----------
+
+export function hsvToHex(h: number, s: number, v: number) {
+  const f = (n: number) => {
+    const k = (n + h / 60) % 6;
+    return Math.round(255 * (v - v * s * Math.max(0, Math.min(k, 4 - k, 1))));
+  };
+  return `#${[f(5), f(3), f(1)].map((x) => x.toString(16).padStart(2, "0")).join("")}`;
+}
+
+export function hexToHsv(hex: string) {
+  const [r, g, b] = [1, 3, 5].map((o) => parseInt(hex.slice(o, o + 2), 16) / 255);
+  const max = Math.max(r, g, b);
+  const d = max - Math.min(r, g, b);
+  let h = 0;
+  if (d) h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return { h: (h * 60 + 360) % 360, s: max ? d / max : 0, v: max };
 }

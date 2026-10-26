@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import Car from "./Car";
-import { PAINTS } from "@/lib/cars";
 import { ChatMsg, MAX_CHAT } from "@/lib/race";
 
 const QUICK = ["👍", "😂", "🔥", "😮", "🏁", "GG"];
@@ -17,6 +16,12 @@ const EMOJIS = [
 // One or a few emoji and nothing else: shown big, like on phones.
 const EMOJI_ONLY = /^(?:\p{Extended_Pictographic}|\p{Emoji_Component}|‍|️|\s){1,12}$/u;
 const isBigEmoji = (t: string) => EMOJI_ONLY.test(t) && /\p{Extended_Pictographic}/u.test(t) && [...t.replace(/\s/g, "")].length <= 8;
+
+/** Car colours as name colours, except ones too pale to read on white. */
+function readable(hex: string) {
+  const [r, g, b] = [1, 3, 5].map((o) => parseInt(hex.slice(o, o + 2), 16) / 255);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.62 ? undefined : hex;
+}
 
 const timeOf = (at: number) => new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
@@ -84,7 +89,7 @@ export default function Chat({
           const prev = messages[i - 1];
           const first = !prev || prev.system || prev.from !== m.from;
           const big = m.text !== null && isBigEmoji(m.text);
-          const color = m.car ? (PAINTS[m.car.c]?.hex ?? "#1f6feb") : "#1f6feb";
+          const color = m.car?.p ?? "#1f6feb";
           return (
             <div key={m.id} className={`chat-row ${mine ? "mine" : ""} ${first ? "first" : ""}`}>
               {!mine && (
@@ -94,7 +99,7 @@ export default function Chat({
               )}
               <div className={`bubble ${big ? "big" : ""} ${m.text === null ? "locked" : ""}`}>
                 {!mine && first && (
-                  <span className="bubble-name" style={{ color: color === "#f2f4f7" ? undefined : color }}>
+                  <span className="bubble-name" style={{ color: readable(color) }}>
                     {m.name}
                   </span>
                 )}

@@ -1,6 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useSyncExternalStore } from "react";
+import { CAR_MODELS, bestSpeed, tierReached } from "@/lib/cars";
+import { subscribe as subscribeProgress } from "@/lib/progress";
 
 // Shared by the lessons page and the car race: full screen, the first-launch prompt and the rotate prompt.
 
@@ -168,5 +171,64 @@ export function KeyboardIcon() {
       <rect x="2.5" y="6" width="19" height="12" rx="2" />
       <path d="M6 10h.01M9 10h.01M12 10h.01M15 10h.01M18 10h.01M6.5 14h11" />
     </svg>
+  );
+}
+
+// ---------- new cars unlocked ----------
+
+const SEEN_TIER_KEY = "typefast:tier-seen";
+let seenTier: number | null = null;
+const tierListeners = new Set<() => void>();
+const subscribeTier = (cb: () => void) => {
+  tierListeners.add(cb);
+  return () => tierListeners.delete(cb);
+};
+function getSeenTier() {
+  if (seenTier === null) {
+    try {
+      seenTier = Number(localStorage.getItem(SEEN_TIER_KEY)) || 0;
+    } catch {
+      seenTier = 0;
+    }
+  }
+  return seenTier;
+}
+function markTierSeen(tier: number) {
+  seenTier = tier;
+  try {
+    localStorage.setItem(SEEN_TIER_KEY, String(tier));
+  } catch {
+    // storage blocked — the note may show again next visit
+  }
+  tierListeners.forEach((l) => l());
+}
+const zero = () => 0;
+const big = () => Infinity;
+
+/** A note when the player's speed has opened a new tier of cars. */
+export function UnlockToast() {
+  const best = useSyncExternalStore(subscribeProgress, bestSpeed, zero);
+  const seen = useSyncExternalStore(subscribeTier, getSeenTier, big);
+  const tier = tierReached(best);
+  const fresh = CAR_MODELS.filter((m) => m.tier > seen && m.tier <= tier);
+  if (tier <= seen || fresh.length === 0) return null;
+  return (
+    <div className="unlock-toast" role="status">
+      <span className="unlock-icon" aria-hidden>
+        🔓
+      </span>
+      <span className="unlock-text">
+        <b>New cars unlocked!</b>
+        <small>
+          You reached {tier} wpm — {fresh.length} new {fresh.length === 1 ? "car" : "cars"} in the garage.
+        </small>
+      </span>
+      <Link className="btn primary" href="/race" onClick={() => markTierSeen(tier)}>
+        See cars
+      </Link>
+      <button className="nav-btn" onClick={() => markTierSeen(tier)} aria-label="Close">
+        ×
+      </button>
+    </div>
   );
 }

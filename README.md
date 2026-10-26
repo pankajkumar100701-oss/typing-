@@ -32,8 +32,12 @@ bar and in the menu). On a phone held upright it first asks you to rotate, or yo
 
 **☰ Menu → Games → Car Race.**
 
-1. **Customise your car** — 7 cars (from photos in `public/cars/`) and 13 paints. A paint is laid
-   only on the car's body panels, keeping the photo's light and shade; "Original" keeps its colour.
+1. **Customise your car** — pick a car and paint it: the colour ring gives any colour (with a
+   dark ↔ bright slider), **Original** keeps the photo's colour, and there are 12 ready-made paints.
+   Paint is laid only on the car's body panels, keeping the photo's light and shade.
+   **Cars unlock with speed** in tiers at 10, 20 … 100 wpm (5 cars per tier). Your speed is your best
+   run with at least 80% accuracy in a race, a timed test or an Experienced/Advance lesson; the first
+   car is always free. A note pops up when a new tier opens.
 2. Enter your name, then:
    - **PLAY** — race alone.
    - **Create game** — makes a room with a **6-letter password** and a link (`/race#PASSWORD`).
@@ -88,4 +92,5 @@ Add a lesson by adding an entry to `SECTIONS` in `lib/lessons.ts`; add a C progr
 
 Add a car by putting a 480×180 transparent `<id>.webp` (car facing right, tyres on the bottom
 edge) and a `<id>-paint.png` mask (white where the body paint is) in `public/cars/`, then adding
-it to `CAR_MODELS` in `lib/cars.ts`.
+it with its tier (wpm) to `CAR_MODELS` in `lib/cars.ts`. The cars there now are stand-ins until
+the full set arrives.

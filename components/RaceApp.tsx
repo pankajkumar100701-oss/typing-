@@ -5,11 +5,12 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import TypingSession, { SessionResult } from "./TypingSession";
 import Car from "./Car";
 import Chat from "./Chat";
-import { FullscreenButton, KeyboardIcon, LaunchPrompt } from "./Shell";
+import { FullscreenButton, KeyboardIcon, LaunchPrompt, UnlockToast } from "./Shell";
 import { CLEAN_SHARE, MAX_PLAYERS, Player, RACE_WORDS, Race, RaceView, cleanName, raceLink } from "@/lib/race";
-import { CAR_MODELS, CarLook, PAINTS, getCar, getCarOnServer, saveCar, subscribeCar } from "@/lib/cars";
+import { CAR_MODELS, CarLook, PAINTS, TIERS, bestSpeed, getCar, getCarOnServer, isUnlocked, modelOf, paintCar, saveCar, subscribeCar } from "@/lib/cars";
+import ColourRing from "./ColourRing";
 import { CODE_LEN, cleanCode, isCode, newCode } from "@/lib/secure";
-import { speedBand } from "@/lib/progress";
+import { saveResult, speedBand, subscribe as subscribeProgress } from "@/lib/progress";
 import { getKbdPref, getKbdPrefOnServer, playComplete, playCount, primeAudio, subscribeSound, toggleKbd } from "@/lib/sound";
 
 const NAME_KEY = "typefast:name";
@@ -109,6 +110,7 @@ export default function RaceApp() {
   return (
     <div className={`app race-app kbd-${kbdPref}`}>
       <LaunchPrompt />
+      <UnlockToast />
       <header className="toolbar" onClick={() => (document.activeElement as HTMLElement | null)?.blur()}>
         {view ? (
           <button className="btn quit-btn" onClick={quit}>
@@ -235,54 +237,115 @@ export default function RaceApp() {
   );
 }
 
-/** Step 1: pick a car and its paint. */
+/** Step 1: pick a car and its paint. Cars unlock tier by tier as the player gets faster. */
 function CarStep({ car, invite, onNext }: { car: CarLook; invite: string | null; onNext: () => void }) {
+  const best = useSyncExternalStore(subscribeProgress, bestSpeed, () => 0);
+  const [ring, setRing] = useState(false);
+  const [hint, setHint] = useState<string | null>(null);
   const set = (patch: Partial<CarLook>) => saveCar({ ...getCar(), ...patch });
-  const step = (d: number) => set({ m: (car.m + d + CAR_MODELS.length) % CAR_MODELS.length });
+  const open = CAR_MODELS.filter((m) => isUnlocked(m, best));
+  const step = (d: number) => {
+    const i = open.findIndex((m) => m.id === car.id);
+    set({ id: open[(i + d + open.length) % open.length].id });
+  };
+  const preset = PAINTS.find((x) => x.hex === car.p);
+  const next = TIERS.find((t) => t > best);
+
+  // Paint the chosen car in every ready-made colour now, so switching is instant.
+  useEffect(() => {
+    for (const x of PAINTS) void paintCar({ id: car.id, p: x.hex });
+  }, [car.id]);
+
   return (
     <div className="setup car-step">
       <div className="garage">
         <p className="eyebrow">{invite ? `Invited to room ${invite} · step 1 of 2` : "Step 1 of 2"}</p>
         <h1>Customise your car</h1>
         <div className="stage">
-          <button className="stage-arrow" onClick={() => step(-1)} aria-label="Previous car">
+          <button className="stage-arrow" onClick={() => step(-1)} aria-label="Previous car" disabled={open.length < 2}>
             ‹
           </button>
           <div className="stage-car">
             <Car look={car} />
           </div>
-          <button className="stage-arrow" onClick={() => step(1)} aria-label="Next car">
+          <button className="stage-arrow" onClick={() => step(1)} aria-label="Next car" disabled={open.length < 2}>
             ›
           </button>
         </div>
         <p className="stage-name">
-          <b>{CAR_MODELS[car.m].name}</b> · {PAINTS[car.c].name}
+          <b>{modelOf(car.id).name}</b> · {car.p ? (preset?.name ?? car.p.toUpperCase()) : "Original"}
+        </p>
+        <p className="speed-note">
+          Your best: <b>{best} wpm</b>
+          {next ? ` · next cars at ${next} wpm` : " · every car unlocked 🏆"}
         </p>
       </div>
 
       <div className="garage-options">
         <h3>Car</h3>
-        <div className="model-grid">
-          {CAR_MODELS.map((m, i) => (
-            <button key={m.id} className={`model ${car.m === i ? "on" : ""}`} onClick={() => set({ m: i })} aria-label={m.name}>
-              <Car look={{ m: i, c: car.c }} />
-              <span>{m.name}</span>
-            </button>
-          ))}
+        <div className="tiers">
+          {TIERS.map((tier) => {
+            const cars = CAR_MODELS.filter((m) => m.tier === tier);
+            if (!cars.length) return null;
+            const reached = best >= tier;
+            return (
+              <section key={tier} className={`tier ${reached ? "open" : ""}`}>
+                <h4>
+                  {reached ? "🔓" : "🔒"} {tier} wpm
+                  {!reached && <small> · {tier - best} wpm to go</small>}
+                </h4>
+                <div className="model-grid">
+                  {cars.map((m) => {
+                    const free = isUnlocked(m, best);
+                    return (
+                      <button
+                        key={m.id}
+                        className={`model ${car.id === m.id ? "on" : ""} ${free ? "" : "locked"}`}
+                        onClick={() => {
+                          if (free) {
+                            setHint(null);
+                            set({ id: m.id });
+                          } else setHint(`🔒 ${m.name} unlocks at ${m.tier} wpm. Your best is ${best} wpm — race, take a test or type paragraphs to get faster!`);
+                        }}
+                        aria-label={free ? m.name : `${m.name}, locked until ${m.tier} wpm`}
+                      >
+                        <Car look={{ id: m.id, p: free ? car.p : null }} />
+                        <span>{m.name}</span>
+                        {!free && <i className="lock">🔒 {m.tier}</i>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            );
+          })}
         </div>
+        {hint && <p className="lock-hint">{hint}</p>}
+
         <h3>Paint</h3>
         <div className="swatches">
-          {PAINTS.map((p, i) => (
+          <button
+            className={`swatch wheel ${ring || (car.p && !preset) ? "on" : ""}`}
+            style={car.p && !preset ? ({ "--pick": car.p } as React.CSSProperties) : undefined}
+            onClick={() => setRing((r) => !r)}
+            aria-label="Any colour"
+            title="Any colour"
+          />
+          <button className={`swatch original ${car.p === null ? "on" : ""}`} onClick={() => set({ p: null })} aria-label="Original" title="Original colour">
+            <span>Original</span>
+          </button>
+          {PAINTS.map((x) => (
             <button
-              key={p.name}
-              className={`swatch ${car.c === i ? "on" : ""} ${p.hex ? "" : "original"}`}
-              style={p.hex ? { background: p.hex } : undefined}
-              onClick={() => set({ c: i })}
-              aria-label={p.name}
-              title={p.name}
+              key={x.hex}
+              className={`swatch ${car.p === x.hex ? "on" : ""}`}
+              style={{ background: x.hex }}
+              onClick={() => set({ p: x.hex })}
+              aria-label={x.name}
+              title={x.name}
             />
           ))}
         </div>
+        {ring && <ColourRing value={car.p} onPick={(hex) => set({ p: hex })} onDone={() => setRing(false)} />}
         <button className="btn primary big next-btn" onClick={onNext}>
           Next →
         </button>
@@ -438,7 +501,10 @@ function RaceRoom({ view, race, chat }: { view: RaceView; race: Race; chat: Reac
       const minutes = Math.max(end - (goAt ?? end), 1000) / 60000;
       setMine({ round: room.round, pos: room.text.length, done: true });
       setDoneAt(end);
-      race.progress(room.text.length, Math.round(r.correct / 5 / minutes), r.acc, r.correct >= r.total * CLEAN_SHARE);
+      const wpm = Math.round(r.correct / 5 / minutes);
+      race.progress(room.text.length, wpm, r.acc, r.correct >= r.total * CLEAN_SHARE);
+      // A race's speed counts towards unlocking cars.
+      saveResult("race", { wpm, acc: r.acc });
       playComplete();
     },
     [race, goAt, room.round, room.text.length],

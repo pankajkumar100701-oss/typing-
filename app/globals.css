@@ -2095,8 +2095,19 @@ a.game-card:hover {
   border: 2px solid #fff;
   box-shadow: 0 0 0 1px var(--line);
 }
+.swatch.wheel {
+  background:
+    radial-gradient(circle, var(--pick, #fff) 0 30%, transparent 32%),
+    conic-gradient(red, yellow, lime, cyan, blue, magenta, red);
+}
 .swatch.original {
-  background: conic-gradient(#e5303a, #f5c400, #2f9e5b, #1f6feb, #8e4ec6, #e5303a);
+  width: auto;
+  padding: 0 10px;
+  border-radius: 99px;
+  background: var(--sky-2);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text);
 }
 .swatch.on {
   box-shadow:
@@ -2706,4 +2717,204 @@ a.game-card:hover {
   .launch-icon {
     display: none;
   }
+}
+
+/* ---------- garage: tiers, locks, colour ring ---------- */
+.speed-note {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.speed-note b {
+  color: var(--accent);
+}
+.tiers {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: min(46dvh, 420px);
+  overflow-y: auto;
+  padding-right: 2px;
+}
+.tier h4 {
+  margin: 0 0 4px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.tier.open h4 {
+  color: var(--good);
+}
+.tier h4 small {
+  font-weight: 500;
+  color: var(--muted);
+}
+.model {
+  position: relative;
+}
+.model.locked {
+  cursor: not-allowed;
+  background: var(--panel);
+  color: var(--muted);
+}
+.model.locked .car {
+  filter: grayscale(1) brightness(0.55);
+  opacity: 0.55;
+}
+.lock {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  padding: 1px 6px;
+  border-radius: 99px;
+  background: #1d2633d9;
+  color: #fff;
+  font-size: 0.62rem;
+  font-style: normal;
+  font-weight: 700;
+}
+.lock-hint {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #fff4d1;
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+.ring-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--sky-2);
+  animation: pop 0.18s ease-out;
+}
+.ring {
+  --dark: 0;
+  position: relative;
+  flex: none;
+  width: 168px;
+  height: 168px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle closest-side, #fff, #fff0),
+    conic-gradient(red, yellow, lime, cyan, blue, magenta, red);
+  box-shadow:
+    0 0 0 3px var(--surface),
+    0 4px 14px #1d263333;
+  touch-action: none;
+  cursor: crosshair;
+}
+/* the slider's darkness laid over the wheel */
+.ring::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: #000;
+  opacity: var(--dark);
+  pointer-events: none;
+}
+.ring-dot {
+  position: absolute;
+  z-index: 1;
+  width: 22px;
+  height: 22px;
+  margin: -11px 0 0 -11px;
+  border-radius: 50%;
+  border: 3px solid #fff;
+  box-shadow: 0 1px 6px #0006;
+  pointer-events: none;
+}
+.ring-side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 150px;
+}
+.ring-preview {
+  width: 54px;
+  height: 54px;
+  border-radius: 14px;
+  box-shadow:
+    0 0 0 3px var(--surface),
+    0 2px 10px #1d263333;
+}
+.ring-side code {
+  font-family: var(--font-code);
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.ring-light {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  font-size: 0.7rem;
+  color: var(--muted);
+  text-align: center;
+}
+.ring-light input {
+  width: 100%;
+  height: 14px;
+  border-radius: 99px;
+  appearance: none;
+  background: linear-gradient(90deg, #000, var(--full));
+}
+.ring-light input::-webkit-slider-thumb {
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 3px solid #fff;
+  background: transparent;
+  box-shadow: 0 1px 6px #0006;
+}
+.ring-light input::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 3px solid #fff;
+  background: transparent;
+  box-shadow: 0 1px 6px #0006;
+}
+.unlock-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 14px;
+  z-index: 38;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(460px, calc(100vw - 24px));
+  padding: 10px 10px 10px 14px;
+  border-radius: 16px;
+  background: var(--surface);
+  border: 1px solid var(--good);
+  box-shadow: 0 12px 34px #1d263340;
+  transform: translateX(-50%);
+  animation: toast 0.35s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+@keyframes toast {
+  from {
+    transform: translate(-50%, 30px);
+    opacity: 0;
+  }
+}
+.unlock-icon {
+  font-size: 1.6rem;
+}
+.unlock-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.unlock-text small {
+  color: var(--muted);
+  font-size: 0.75rem;
 }

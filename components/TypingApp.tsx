@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useState, useSyncExternalStore } from "react";
 import TypingSession, { SessionResult, fmtTime } from "./TypingSession";
 import Car from "./Car";
-import { FullscreenButton, FullscreenIcon, KeyboardIcon, LaunchPrompt, toggleFullscreen, useFullscreen } from "./Shell";
+import { FullscreenButton, FullscreenIcon, KeyboardIcon, LaunchPrompt, UnlockToast, toggleFullscreen, useFullscreen } from "./Shell";
 import { ALL_LESSONS, SECTIONS, Section, makeText, testText } from "@/lib/lessons";
 import { BANDS, getProgress, getServerProgress, saveResult, speedBand, subscribe } from "@/lib/progress";
 import { getCar, getCarOnServer, subscribeCar } from "@/lib/cars";
@@ -97,6 +97,7 @@ export default function TypingApp() {
   return (
     <div className={`app kbd-${kbdPref}`}>
       <LaunchPrompt />
+      <UnlockToast />
 
       {/* Drop focus after a toolbar click so typed keys never re-press a button. */}
       <header className="toolbar" onClick={() => (document.activeElement as HTMLElement | null)?.blur()}>
