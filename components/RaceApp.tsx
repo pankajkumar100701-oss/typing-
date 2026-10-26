@@ -748,7 +748,11 @@ function Track({
               {p.id === myId && <small> (you)</small>}
             </span>
             <div className="road">
-              <div className={`car-slot ${boost ? "boost" : ""}`} style={{ transform: `translateX(calc(${pct} * (var(--road-w) - var(--car-w))))` }}>
+              <div
+                className={`car-slot ${boost ? "boost" : ""}`}
+                // short cars take a narrower slot, so they start at the line and stop at the flag
+                style={{ "--span": modelOf(p.car.id).span ?? 1, transform: `translateX(calc(${pct} * (var(--road-w) - var(--slot-w))))` } as React.CSSProperties}
+              >
                 <Car look={p.car} front />
               </div>
             </div>

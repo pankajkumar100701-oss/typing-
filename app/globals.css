@@ -1245,10 +1245,11 @@ button:disabled {
     #4a5668;
 }
 .car-slot {
+  --slot-w: calc(var(--car-w) * var(--span, 1));
   position: absolute;
   left: 0;
   bottom: 1px;
-  width: var(--car-w);
+  width: var(--slot-w);
   transition: transform 0.25s linear;
   will-change: transform;
 }
@@ -3138,4 +3139,11 @@ a.game-card:hover {
 }
 .cheer.top {
   background: var(--good);
+}
+
+/* the photo keeps its full frame; its empty left part hangs outside the slot */
+.car-slot .car {
+  width: var(--car-w);
+  max-width: none;
+  margin-left: calc(var(--slot-w) - var(--car-w));
 }
