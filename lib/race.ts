@@ -25,13 +25,27 @@ export type Player = {
   finished: number | null;
   /** Crossed the line with too many mistakes: no place until everyone is done, then the last ones. */
   messy: boolean;
+  /** Guests say whether they're in the next race; the host always is. */
+  ready: boolean;
   /** 1st, 2nd… once finished. */
   place: number | null;
 };
 
-export type RoomState = { phase: Phase; round: number; text: string; players: Player[] };
+/** `words`: the length of the next race, as the host has set it. */
+export type RoomState = { phase: Phase; round: number; text: string; words: number; players: Player[] };
 
-export type ChatMsg = { id: number; from: string; name: string; car: CarLook | null; text: string | null; at: number; system?: boolean };
+/** `key`: the sender's own id for a message, so an edit finds it on every screen. */
+export type ChatMsg = {
+  id: number;
+  key?: string;
+  from: string;
+  name: string;
+  car: CarLook | null;
+  text: string | null;
+  at: number;
+  edited?: boolean;
+  system?: boolean;
+};
 
 export type RaceView = {
   status: "connecting" | "ready" | "error";
@@ -52,7 +66,8 @@ type ToHost =
   | { t: "join"; name: string; car: CarLook }
   | { t: "progress"; pos: number; wpm: number; acc: number; clean: boolean }
   | { t: "chat"; m: Sealed }
-  | { t: "car"; car: CarLook };
+  | { t: "car"; car: CarLook }
+  | { t: "ready"; ready: boolean };
 type ToGuest =
   | { t: "welcome"; id: string }
   | { t: "full" }
@@ -75,11 +90,23 @@ export const MAX_CHAT = 300;
 export const CLEAN_SHARE = 0.8;
 const RACE_LESSON = ALL_LESSONS.find((l) => l.id === "a1")!;
 
+/** A sealed chat text: `{ k, t, e? }` (key, text, edit); older plain texts still read. */
+function readBody(opened: string | null): { key?: string; text: string | null; edit: boolean } {
+  if (opened === null) return { text: null, edit: false };
+  try {
+    const b = JSON.parse(opened) as { k?: unknown; t?: unknown; e?: unknown };
+    if (b && typeof b.k === "string" && typeof b.t === "string") return { key: b.k.slice(0, 16), text: b.t.slice(0, MAX_CHAT), edit: !!b.e };
+  } catch {
+    // a plain message
+  }
+  return { text: opened.slice(0, MAX_CHAT), edit: false };
+}
+
 export function raceLink(code: string) {
   return `${location.origin}/race#${code}`;
 }
 
-const EMPTY_ROOM: RoomState = { phase: "lobby", round: 0, text: "", players: [] };
+const EMPTY_ROOM: RoomState = { phase: "lobby", round: 0, text: "", words: RACE_WORDS[1], players: [] };
 
 const ERRORS: Record<string, string> = {
   "peer-unavailable": "No room with this password. Check the letters, or ask your friend for a new link.",
@@ -233,16 +260,35 @@ export class Race {
   }
 
   private async received(from: string, m: Sealed) {
-    const text = await unseal(await this.key, m);
+    const opened = await unseal(await this.key, m);
     if (this.destroyed) return;
-    this.addChat({ from, ...this.sender(from), text: text === null ? null : text.slice(0, MAX_CHAT) });
+    const { key, text, edit } = readBody(opened);
+    if (edit && key) {
+      const chat = this.view.chat.map((x) => (x.from === from && x.key === key ? { ...x, text, edited: true } : x));
+      return this.set({ chat });
+    }
+    this.addChat({ from, ...this.sender(from), key, text });
   }
 
+  /** Send a message. Each one carries its own key inside the sealed text, so it can be edited later. */
   async say(raw: string) {
     const text = raw.trim().slice(0, MAX_CHAT);
     if (!text || this.view.solo || this.view.status !== "ready") return;
-    const m = await seal(await this.key, text);
-    this.addChat({ from: this.view.myId, ...this.sender(this.view.myId), text });
+    const key = Math.random().toString(36).slice(2, 10);
+    this.addChat({ from: this.view.myId, ...this.sender(this.view.myId), key, text });
+    this.send(await seal(await this.key, JSON.stringify({ k: key, t: text })));
+  }
+
+  /** Change one of my messages, for everyone. */
+  async edit(key: string, raw: string) {
+    const text = raw.trim().slice(0, MAX_CHAT);
+    if (!text || this.view.solo || this.view.status !== "ready") return;
+    const chat = this.view.chat.map((x) => (x.from === this.view.myId && x.key === key ? { ...x, text, edited: true } : x));
+    this.set({ chat });
+    this.send(await seal(await this.key, JSON.stringify({ k: key, t: text, e: 1 })));
+  }
+
+  private send(m: Sealed) {
     if (this.view.isHost) this.relay("host", m);
     else this.hostConn?.send({ t: "chat", m } satisfies ToHost);
   }
@@ -282,6 +328,18 @@ export class Race {
     this.hostConn?.send({ t: "progress", pos, wpm, acc, clean } satisfies ToHost);
   }
 
+  /** A guest is in or out of the next race. */
+  setReady(ready: boolean) {
+    if (this.view.isHost) return;
+    if (this.hostConn?.open) this.hostConn.send({ t: "ready", ready } satisfies ToHost);
+  }
+
+  /** The host picks the length of the next race; everyone sees it. */
+  setWords(words: number) {
+    const { phase } = this.view.room;
+    if (this.view.isHost && (phase === "lobby" || phase === "done")) this.setRoom({ words });
+  }
+
   /** A new car or paint from the garage, shown to everyone in the room. */
   changeCar(car: CarLook) {
     if (car.id === this.car.id && car.p === this.car.p) return;
@@ -298,7 +356,7 @@ export class Race {
   }
 
   private newPlayer(id: string, name: string, car: CarLook): Player {
-    return { id, name, car, racing: false, pos: 0, wpm: 0, acc: 100, finished: null, messy: false, place: null };
+    return { id, name, car, racing: false, pos: 0, wpm: 0, acc: 100, finished: null, messy: false, ready: true, place: null };
   }
 
   private accept(conn: DataConnection) {
@@ -307,6 +365,7 @@ export class Race {
       if (msg.t === "join") this.join(conn, msg.name, msg.car);
       else if (!this.conns.has(conn.peer)) return;
       else if (msg.t === "car") this.setCar(conn.peer, msg.car);
+      else if (msg.t === "ready") this.setRoom({ players: this.view.room.players.map((p) => (p.id === conn.peer ? { ...p, ready: !!msg.ready } : p)) });
       else if (msg.t === "progress") this.update(conn.peer, Number(msg.pos) || 0, Number(msg.wpm) || 0, Number(msg.acc) || 0, !!msg.clean);
       else if (msg.t === "chat" && msg.m && typeof msg.m === "object") {
         this.relay(conn.peer, msg.m);
@@ -346,7 +405,8 @@ export class Race {
     const text = makeText(RACE_LESSON, (Math.random() * 2 ** 32) | 0, Math.min(300, Math.max(5, words)));
     this.hostGoAt = performance.now() + COUNTDOWN_MS;
     this.view.goAt = this.hostGoAt;
-    const fresh = players.map((p) => ({ ...p, racing: true, pos: 0, wpm: 0, acc: 100, finished: null, messy: false, place: null }));
+    // Guests who aren't ready watch this one.
+    const fresh = players.map((p) => ({ ...p, racing: p.id === "host" || p.ready !== false, pos: 0, wpm: 0, acc: 100, finished: null, messy: false, place: null }));
     this.setRoom({ phase: "countdown", round: round + 1, text, players: fresh });
     this.goTimer = window.setTimeout(() => {
       this.setRoom({ phase: "race" });

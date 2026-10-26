@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Car from "./Car";
 import { ChatMsg, MAX_CHAT } from "@/lib/race";
 
-const QUICK = ["👍", "😂", "🔥", "😮", "🏁", "GG"];
+const QUICK = ["👍", "😂", "🔥"];
 const EMOJIS = [
   "😀", "😂", "🤣", "😅", "😎", "🤩", "😍", "🥳", "😜", "🤪", "😇", "🙃",
   "🤔", "😏", "😬", "😱", "😭", "😤", "😡", "🥶", "🤯", "😴", "🤝", "👏",
@@ -30,16 +30,23 @@ export default function Chat({
   myId,
   secure,
   onSend,
+  onEdit,
+  suggestions = [],
   onClose,
 }: {
   messages: ChatMsg[];
   myId: string;
   secure: boolean;
   onSend: (text: string) => void;
+  /** Change one of my messages, by its key. */
+  onEdit: (key: string, text: string) => void;
+  /** Ready-made messages that fit what's going on in the room. */
+  suggestions?: string[];
   onClose?: () => void;
 }) {
   const [draft, setDraft] = useState("");
   const [picker, setPicker] = useState(false);
+  const [editing, setEditing] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -51,9 +58,21 @@ export default function Chat({
 
   const send = (text: string) => {
     if (!text.trim()) return;
-    onSend(text);
+    if (editing) onEdit(editing, text);
+    else onSend(text);
+    setEditing(null);
     setDraft("");
     setPicker(false);
+  };
+  const startEdit = (m: ChatMsg) => {
+    if (!m.key || m.text === null) return;
+    setEditing(m.key);
+    setDraft(m.text);
+    inputRef.current?.focus();
+  };
+  const stopEdit = () => {
+    setEditing(null);
+    setDraft("");
   };
 
   return (
@@ -97,14 +116,22 @@ export default function Chat({
                   {first && m.car && <Car look={m.car} />}
                 </span>
               )}
-              <div className={`bubble ${big ? "big" : ""} ${m.text === null ? "locked" : ""}`}>
+              <div
+                className={`bubble ${big ? "big" : ""} ${m.text === null ? "locked" : ""} ${mine && m.key ? "editable" : ""} ${editing && editing === m.key ? "editing" : ""}`}
+                onClick={mine ? () => startEdit(m) : undefined}
+                title={mine && m.key ? "Tap to edit" : undefined}
+              >
                 {!mine && first && (
                   <span className="bubble-name" style={{ color: readable(color) }}>
                     {m.name}
                   </span>
                 )}
                 <span className="bubble-text">{m.text ?? "🔒 This message couldn't be opened here"}</span>
-                <time>{timeOf(m.at)}</time>
+                <time>
+                  {m.edited && "edited · "}
+                  {timeOf(m.at)}
+                  {mine && m.key && <span className="edit-hint"> ✏️</span>}
+                </time>
               </div>
             </div>
           );
@@ -112,7 +139,7 @@ export default function Chat({
       </div>
 
       <div className="chat-quick">
-        {QUICK.map((q) => (
+        {[...suggestions, ...QUICK].map((q) => (
           <button key={q} className="quick" onClick={() => send(q)}>
             {q}
           </button>
@@ -132,6 +159,15 @@ export default function Chat({
               {e}
             </button>
           ))}
+        </div>
+      )}
+
+      {editing && (
+        <div className="edit-bar">
+          ✏️ Editing your message
+          <button type="button" className="link-btn" onClick={stopEdit}>
+            Cancel
+          </button>
         </div>
       )}
 

@@ -202,7 +202,7 @@ export default function RaceApp() {
           <button
             // a new message restarts the shake
             key={unread ? lastChat : 0}
-            className={`sound-btn chat-btn ${chatOpen ? "on" : ""} ${unread ? "ring" : ""}`}
+            className={`sound-btn chat-btn ${chatOpen ? "on" : ""} ${unread ? "shake" : ""}`}
             onClick={() => (chatOpen ? closeChat() : openChat())} aria-label="Chat">
             💬 <span>Chat</span>
             {unread > 0 && <i className="dot" aria-label={`${unread} new`} />}
@@ -267,7 +267,7 @@ export default function RaceApp() {
             view={view}
             race={race}
             onGarage={openGarage}
-            chat={docked ? <Chat messages={view.chat} myId={view.myId} secure={view.secure} onSend={(t) => void race.say(t)} /> : null}
+            chat={docked ? <Chat {...chatProps(view, race)} /> : null}
           />
         )
       )}
@@ -281,7 +281,7 @@ export default function RaceApp() {
       {online && !docked && chatOpen && race && (
         <div className="chat-sheet" onClick={closeChat}>
           <div onClick={(e) => e.stopPropagation()}>
-            <Chat messages={view.chat} myId={view.myId} secure={view.secure} onSend={(t) => void race.say(t)} onClose={closeChat} />
+            <Chat {...chatProps(view, race)} onClose={closeChat} />
           </div>
         </div>
       )}
@@ -316,6 +316,26 @@ export default function RaceApp() {
     </div>
   );
 }
+
+/** Ready-made chat messages for what's going on in the room. */
+function chatTips({ room, isHost }: RaceView) {
+  const { phase, words } = room;
+  if (phase === "countdown" || phase === "race") return ["Go go go! 🔥", "So fast 😮", "Wait for me 🐢", "GG"];
+  if (phase === "done")
+    return ["GG 🏆", "One more race? 🔁", "Nice race! 👏", isHost ? "Ready for the next one?" : words < 50 ? "Can we do more words?" : "Can we do fewer words?"];
+  return isHost
+    ? ["Everyone ready? 🏁", "Starting in a moment!", `This race is ${words} words`, "Change your car in the Garage 🚗"]
+    : ["I'm ready! 🏁", "Wait, I'm changing my car colour 🎨", words === 15 ? "Can we do 30 words?" : "Can we do 15 words?", "Can we do 50 words?", "Start please 🙏"];
+}
+
+const chatProps = (view: RaceView, race: Race) => ({
+  messages: view.chat,
+  myId: view.myId,
+  secure: view.secure,
+  suggestions: chatTips(view),
+  onSend: (t: string) => void race.say(t),
+  onEdit: (key: string, t: string) => void race.edit(key, t),
+});
 
 /** The garage: pick a car and its paint. Cars unlock tier by tier as the player gets faster. */
 function CarStep({ car, invite, done, onNext }: { car: CarLook; invite: string | null; done: string; onNext: () => void }) {
@@ -605,6 +625,7 @@ function RaceRoom({ view, race, chat, onGarage }: { view: RaceView; race: Race; 
           onClick={() => {
             setCustomWords("");
             setWords(n);
+            race.setWords(n);
           }}
         >
           {n} words
@@ -621,7 +642,10 @@ function RaceRoom({ view, race, chat, onGarage }: { view: RaceView; race: Race; 
         onChange={(e) => {
           setCustomWords(e.target.value);
           const n = Math.round(Number(e.target.value));
-          if (n > 0) setWords(Math.min(300, Math.max(5, n)));
+          if (n > 0) {
+            setWords(Math.min(300, Math.max(5, n)));
+            race.setWords(Math.min(300, Math.max(5, n)));
+          }
         }}
         aria-label="Custom number of words"
       />
@@ -630,7 +654,7 @@ function RaceRoom({ view, race, chat, onGarage }: { view: RaceView; race: Race; 
 
   return (
     <div className="race-room">
-      <Track players={room.players} text={room.text} myId={myId} mine={myRound} phase={room.phase} />
+      <Track players={room.players} text={room.text} myId={myId} mine={myRound} phase={room.phase} solo={solo} />
 
       {status === "connecting" ? (
         <div className="race-panel">
@@ -644,6 +668,7 @@ function RaceRoom({ view, race, chat, onGarage }: { view: RaceView; race: Race; 
           <div className="race-panel">
             <div className="race-card wide">
               {room.phase === "done" && <Results players={room.players} />}
+              {!solo && <RoomSettings room={room} />}
               {isHost ? (
                 <>
                   {!solo && room.phase === "lobby" && <ShareRoom code={view.code} title="Invite friends" />}
@@ -664,6 +689,11 @@ function RaceRoom({ view, race, chat, onGarage }: { view: RaceView; race: Race; 
               ) : (
                 <>
                   {room.phase === "lobby" && <h2>You&apos;re in! 🎉</h2>}
+                  {me && (
+                    <button className={`ready-btn ${me.ready ? "on" : ""}`} onClick={() => race.setReady(!me.ready)} aria-pressed={me.ready}>
+                      {me.ready ? "✅ Ready" : "⏸ Not ready — tap when you are"}
+                    </button>
+                  )}
                   <p className="muted wait">
                     <span className="dots" aria-hidden /> Waiting for the host to start {room.phase === "done" ? "the next race" : "the race"}…
                   </p>
@@ -727,12 +757,14 @@ function Track({
   myId,
   mine,
   phase,
+  solo,
 }: {
   players: Player[];
   text: string;
   myId: string;
   mine: { pos: number };
   phase: string;
+  solo: boolean;
 }) {
   const live = phase === "countdown" || phase === "race";
   return (
@@ -765,13 +797,35 @@ function Track({
                 </b>
               ) : null}
               <span className={`lane-wpm ${live && p.racing ? speedBand(p.wpm) : ""}`}>
-                {phase === "lobby" || (live && !p.racing) ? (live ? "next race" : "ready") : `${p.wpm} wpm`}
+                {live && !p.racing
+                  ? "next race"
+                  : phase === "lobby"
+                    ? p.id === "host" && !solo
+                      ? "host"
+                      : p.ready || solo
+                        ? "ready"
+                        : "not ready"
+                    : `${p.wpm} wpm`}
               </span>
             </span>
           </div>
         );
       })}
     </div>
+  );
+}
+
+/** What the next race is, so everyone in the room can see it. */
+function RoomSettings({ room }: { room: RaceView["room"] }) {
+  const ready = room.players.filter((p) => p.id === "host" || p.ready).length;
+  return (
+    <p className="room-settings">
+      <span>📝 {room.words} words</span>
+      <span>
+        👥 {room.players.length}/{MAX_PLAYERS} players
+      </span>
+      <span>✅ {ready} ready</span>
+    </p>
   );
 }
 
