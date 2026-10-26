@@ -12,10 +12,14 @@ export type Player = {
   id: string;
   name: string;
   color: number;
-  /** Correct letters typed this round. */
-  correct: number;
+  /** Letters typed this round, right or wrong — the car's position. */
+  pos: number;
   wpm: number;
   acc: number;
+  /** 1, 2… in the order they crossed the finish line. */
+  finished: number | null;
+  /** Crossed the line with too many mistakes: no place until everyone is done, then the last ones. */
+  messy: boolean;
   /** 1st, 2nd… once finished. */
   place: number | null;
 };
@@ -35,7 +39,7 @@ export type RaceView = {
   closesAt: number | null;
 };
 
-type ToHost = { t: "join"; name: string } | { t: "progress"; correct: number; wpm: number; acc: number };
+type ToHost = { t: "join"; name: string } | { t: "progress"; pos: number; wpm: number; acc: number; clean: boolean };
 type ToGuest =
   | { t: "welcome"; id: string }
   | { t: "full" }
@@ -53,6 +57,8 @@ const HEARTBEAT_MS = 4000;
 const HOST_LOST_MS = 15_000;
 export const MAX_PLAYERS = 8;
 export const RACE_WORDS = [15, 30, 50];
+/** A finisher needs at least this share of the paragraph right to win a place on crossing the line. */
+export const CLEAN_SHARE = 0.8;
 const RACE_LESSON = ALL_LESSONS.find((l) => l.id === "a1")!;
 
 export function newCode() {
@@ -166,6 +172,18 @@ export class Race {
     this.closeLink();
   }
 
+  /**
+   * Leave for good. Mid-race the host's page holds the room, so the host's leaving ends the
+   * race for everyone and the link stays open just long enough to send them the results.
+   */
+  quit() {
+    this.onChange = () => {};
+    const racing = this.view.room.phase === "countdown" || this.view.room.phase === "race";
+    if (!this.view.isHost || !racing) return this.destroy();
+    this.end();
+    window.setTimeout(() => this.destroy(), 1600);
+  }
+
   /** Stop all timers and close the link; what's on screen stays. */
   private closeLink() {
     this.closed = true;
@@ -202,23 +220,23 @@ export class Race {
     if (msg.room.phase === "done") this.closeLink();
   }
 
-  /** My position, sent on every change (they are tiny messages). */
-  progress(correct: number, wpm: number, acc: number) {
-    if (this.view.isHost) return this.update("host", correct, wpm, acc);
-    this.hostConn?.send({ t: "progress", correct, wpm, acc } satisfies ToHost);
+  /** My position, sent on every change (they are tiny messages). `clean` matters at the finish. */
+  progress(pos: number, wpm: number, acc: number, clean = true) {
+    if (this.view.isHost) return this.update("host", pos, wpm, acc, clean);
+    this.hostConn?.send({ t: "progress", pos, wpm, acc, clean } satisfies ToHost);
   }
 
   // ---------- host ----------
 
   private newPlayer(id: string, name: string, color: number): Player {
-    return { id, name, color, correct: 0, wpm: 0, acc: 100, place: null };
+    return { id, name, color, pos: 0, wpm: 0, acc: 100, finished: null, messy: false, place: null };
   }
 
   private accept(conn: DataConnection) {
     conn.on("data", (data) => {
       const msg = data as ToHost;
       if (msg.t === "join") this.join(conn, msg.name);
-      else if (msg.t === "progress") this.update(conn.peer, msg.correct, msg.wpm, msg.acc);
+      else if (msg.t === "progress") this.update(conn.peer, msg.pos, msg.wpm, msg.acc, msg.clean);
     });
     const leave = () => {
       // Guests close their side once the results arrive — the results keep everyone who raced.
@@ -266,7 +284,7 @@ export class Race {
   /** Stop waiting for slow or idle players. */
   end() {
     if (!this.view.isHost || (this.view.room.phase !== "countdown" && this.view.room.phase !== "race")) return;
-    this.setRoom({ phase: "done" });
+    this.setRoom({ phase: "done", players: placeMessy(this.view.room.players) });
     // Give the results a moment to reach everyone, then close the link for good.
     if (this.heartbeat) window.clearInterval(this.heartbeat);
     this.heartbeat = null;
@@ -285,15 +303,17 @@ export class Race {
     this.idleTimer = window.setTimeout(() => this.end(), IDLE_MS);
   }
 
-  private update(id: string, correct: number, wpm: number, acc: number) {
+  private update(id: string, pos: number, wpm: number, acc: number, clean: boolean) {
     const { room } = this.view;
     if (room.phase !== "race") return;
     this.resetIdle();
     let place = room.players.filter((p) => p.place !== null).length;
+    const order = room.players.filter((p) => p.finished !== null).length;
     const players = room.players.map((p) => {
-      if (p.id !== id || p.place !== null) return p;
-      const done = correct >= room.text.length;
-      return { ...p, correct, wpm, acc, place: done ? ++place : null };
+      if (p.id !== id || p.finished !== null) return p;
+      if (pos < room.text.length) return { ...p, pos, wpm, acc };
+      // Small slips still win a place; a paragraph typed mostly wrong only gets one at the end.
+      return { ...p, pos, wpm, acc, finished: order + 1, messy: !clean, place: clean ? ++place : null };
     });
     this.setRoom({ players });
     this.checkDone();
@@ -301,7 +321,7 @@ export class Race {
 
   private checkDone() {
     const { players, phase } = this.view.room;
-    if (phase === "race" && players.length > 0 && players.every((p) => p.place !== null)) this.end();
+    if (phase === "race" && players.length > 0 && players.every((p) => p.finished !== null)) this.end();
   }
 
   private setRoom(patch: Partial<RoomState>) {
@@ -321,6 +341,14 @@ export class Race {
     const msg: ToGuest = { t: "state", room, startsIn, closesIn };
     for (const conn of this.conns.values()) if (conn.open) conn.send(msg);
   }
+}
+
+/** At the end, messy finishers take the places after the clean ones, in the order they crossed the line. */
+function placeMessy(players: Player[]) {
+  let place = players.filter((p) => p.place !== null).length;
+  const messy = players.filter((p) => p.messy && p.place === null).sort((a, b) => a.finished! - b.finished!);
+  const places = new Map(messy.map((p) => [p.id, ++place]));
+  return players.map((p) => (places.has(p.id) ? { ...p, place: places.get(p.id)! } : p));
 }
 
 export function cleanName(name: string) {

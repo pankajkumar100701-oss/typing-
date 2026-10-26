@@ -28,7 +28,7 @@ type State = {
 };
 
 type Action =
-  | { type: "type"; char: string; at: number; text: string; code: boolean; exact: boolean }
+  | { type: "type"; char: string; at: number; text: string; code: boolean }
   | { type: "tab"; text: string }
   | { type: "back"; word: boolean }
   | { type: "timeup"; at: number };
@@ -54,7 +54,7 @@ function reducer(state: State, action: Action): State {
     const cut = action.word ? state.typed.replace(/\S*\s?$/, "") : state.typed.slice(0, -1);
     return { ...state, typed: cut, auto: state.auto.filter((i) => i < cut.length) };
   }
-  const { char, at, text, code, exact } = action;
+  const { char, at, text, code } = action;
   if (state.typed.length >= text.length) return state;
   let typed = state.typed + char;
   const auto = [...state.auto];
@@ -71,8 +71,7 @@ function reducer(state: State, action: Action): State {
     keystrokes: state.keystrokes + 1,
     mistakes: state.mistakes + (char === text[state.typed.length] ? 0 : 1),
     startedAt: state.startedAt ?? at,
-    // Exact (car race): the end only counts once every letter is right — fix mistakes with Backspace.
-    finishedAt: (exact ? typed === text : typed.length >= text.length) ? at : null,
+    finishedAt: typed.length >= text.length ? at : null,
   };
 }
 
@@ -122,15 +121,13 @@ type Props = {
   timeLimit?: number;
   onFinish: (result: SessionResult) => void;
   /**
-   * Called with how many letters are right from the start, up to the first mistake, whenever
-   * the typed text changes (car race: the car waits at a mistake until it's fixed).
+   * Called with how many letters are typed (right or wrong) and how many of them are right,
+   * whenever the typed text changes (car race: the car keeps going through mistakes).
    */
-  onProgress?: (correct: number) => void;
-  /** Finish only when the whole text is typed correctly (car race). */
-  exact?: boolean;
+  onProgress?: (typed: number, correct: number) => void;
 };
 
-export default function TypingSession({ text, hint, code = false, para = false, timeLimit, onFinish, onProgress, exact = false }: Props) {
+export default function TypingSession({ text, hint, code = false, para = false, timeLimit, onFinish, onProgress }: Props) {
   const [state, dispatch] = useReducer(reducer, INITIAL);
   const [shift, setShift] = useState(false);
 
@@ -168,9 +165,9 @@ export default function TypingSession({ text, hint, code = false, para = false, 
         flashKey(keyId, "active", 110);
         playKey();
       }
-      dispatch({ type: "type", char, at: performance.now(), text, code, exact });
+      dispatch({ type: "type", char, at: performance.now(), text, code });
     },
-    [flashKey, pos, text, code, exact],
+    [flashKey, pos, text, code],
   );
 
   const backspace = useCallback(
@@ -236,7 +233,7 @@ export default function TypingSession({ text, hint, code = false, para = false, 
     onFinish(measure(state, 0, text));
   }, [finished, state, text, onFinish]);
 
-  // Right letters from the start (up to the first mistake), for the race track.
+  // Letters typed and right so far, for the race track.
   const progressRef = useRef(onProgress);
   useEffect(() => {
     progressRef.current = onProgress;
@@ -245,8 +242,8 @@ export default function TypingSession({ text, hint, code = false, para = false, 
   useEffect(() => {
     if (!progressRef.current) return;
     let correct = 0;
-    while (correct < typed.length && typed[correct] === text[correct]) correct++;
-    progressRef.current(correct);
+    for (let i = 0; i < typed.length; i++) if (typed[i] === text[i]) correct++;
+    progressRef.current(typed.length, correct);
   }, [typed, text]);
 
   // The latest handlers live in a ref, so the on-screen keyboard and the key listener

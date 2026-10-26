@@ -1076,6 +1076,13 @@ button:disabled {
   color: var(--muted);
   white-space: nowrap;
 }
+.quit-btn {
+  padding: 4px 12px;
+  font-size: 0.78rem;
+  color: var(--bad);
+  border-color: color-mix(in srgb, var(--bad) 45%, transparent);
+  white-space: nowrap;
+}
 .race-room {
   flex: 1;
   min-height: 0;
@@ -1231,6 +1238,7 @@ button:disabled {
   container-type: inline-size;
   position: relative;
   height: 100%;
+  overflow: hidden;
   border-bottom: 2px dashed #ffffff40;
   background:
     repeating-linear-gradient(45deg, #fff 0 4px, #1d2633 4px 8px) right / 8px 100% no-repeat,
@@ -1245,9 +1253,68 @@ button:disabled {
   will-change: transform;
 }
 .car {
+  position: relative;
   display: block;
   width: 100%;
   height: auto;
+}
+/* booster: a nitro flame out of the exhaust and speed streaks above 40 wpm */
+.car-slot::before,
+.car-slot::after {
+  content: "";
+  position: absolute;
+  right: 96%;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+.car-slot::before {
+  bottom: 14%;
+  width: 55%;
+  height: 26%;
+  border-radius: 50% 20% 20% 50%;
+  background: linear-gradient(to left, #fffbe0 0%, #ffd23a 22%, #ff7a1a 55%, #ff3d2e00 100%);
+  filter: blur(0.6px);
+  transform-origin: right center;
+}
+.car-slot::after {
+  bottom: 38%;
+  width: 80%;
+  height: 34%;
+  background: repeating-linear-gradient(to bottom, #ffffff90 0 1px, transparent 1px 5px);
+  mask-image: linear-gradient(to left, #000, transparent);
+}
+.car-slot.boost::before {
+  opacity: 1;
+  animation: flame 0.12s ease-in-out infinite alternate;
+}
+.car-slot.boost::after {
+  opacity: 0.7;
+}
+.car-slot.boost .car {
+  animation: rumble 0.16s linear infinite alternate;
+}
+@keyframes flame {
+  from {
+    transform: scaleX(0.75) scaleY(0.85);
+  }
+  to {
+    transform: scaleX(1.15) scaleY(1.05);
+  }
+}
+@keyframes rumble {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-0.6px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .car-slot.boost::before,
+  .car-slot.boost .car {
+    animation: none;
+  }
 }
 .lane-stat {
   display: flex;
@@ -1270,6 +1337,9 @@ button:disabled {
 }
 .place {
   color: #ffd56b;
+}
+.messy {
+  color: #ff9b9e;
 }
 .race-typing {
   position: relative;
@@ -1445,6 +1515,10 @@ button:disabled {
     padding: 0 8px;
   }
   .nav-btn.fs {
+    display: none;
+  }
+  /* room for the Quit button; the share screen shows the full link anyway */
+  .race-app .room-code {
     display: none;
   }
   .session {
